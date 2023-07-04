@@ -180,9 +180,7 @@ class Dataset(object):
             self.minhash_dataset = serialized_obj["minhash_dataset"]       
         if not "mapping" in serialized_obj or not "labels" in serialized_obj:
             raise Exception(f"File {modelpath}/dataset.json does not contain mapping or labels.")
-        self.mapping = serialized_obj["mapping"]
-        self.labels = serialized_obj["labels"]
-        self.labels_tensor = self._get_labels_tensor()
+        self._add_mapping(serialized_obj["mapping"], serialized_obj["labels"])
         
 
     def _get_tf_examples_dataset(self):
