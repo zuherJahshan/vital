@@ -319,22 +319,6 @@ class Vit(MLModel):
             self.save()
 
 
-    def change_hps(
-        self,
-        hps: Dict
-    ):
-        # save a sanpshot of the old model
-        old_net = self.net
-        
-        # create a new model with the new hps
-
-        self.hps.set_hps(hps)
-        self._create_ml_model()
-
-        # transfer the weights from the old model to the new one
-        self._transfer(old_net, copied_trainable=True)
-
-
     def get_hps(self):
         return self.hps
 
@@ -355,8 +339,51 @@ class Vit(MLModel):
         # save the hyperparams
         self.hps.save_hps(self._get_ml_model_path())
 
+        # save layers configuration
+        # self._save_layers_configuration()
+
         # save the weights
         self._save_weights(weights_view=weights_view, new_value=weights_view_value)
+
+        self._save_ml_model_history()
+
+
+    def record_metric(
+        self,
+        epoch: int,
+        metric: str,
+        value: float
+    ):
+        if metric in self.ml_model_history["metrics"]:
+            self.ml_model_history["metrics"][metric].append([epoch, value])
+        else:
+            self.ml_model_history["metrics"][metric] = [[epoch, value]]
+
+
+    def record_hps_change(
+        self,
+        hps: Dict
+    ):
+        self.ml_model_history["hps_changes"].append({
+            self.ml_model_history["current_epoch"]: hps
+        })
+
+
+    def record_transfer(
+        self,
+        name: str,
+    ):
+        self.ml_model_history["transfers"].append({
+            self.ml_model_history["current_epoch"]: name
+        })
+
+
+    def increment_epoch_and_save_history(self):
+        self.ml_model_history["current_epoch"] += 1
+
+
+    def get_name(self):
+        return self.name
 
 
     def get_net(self):
@@ -369,6 +396,24 @@ class Vit(MLModel):
         copied_trainable: bool = False
     ):
         self._transfer(other.get_net(), copied_trainable)
+        self.record_transfer(other.get_name())
+
+
+    def change_hps(
+        self,
+        hps: Dict
+    ):
+        # save a sanpshot of the old model
+        old_net = self.net
+        
+        # create a new model with the new hps
+
+        self.hps.set_hps(hps)
+        self._create_ml_model()
+
+        # transfer the weights from the old model to the new one
+        self._transfer(old_net, copied_trainable=True)
+        self.record_hps_change(hps)
 
 
     def get_layers_by_names(
@@ -382,7 +427,7 @@ class Vit(MLModel):
         epochs: int,
         trainset: Dataset,
         trainset_size: int,
-        shuffle_buffer_size: int = 8192,
+        shuffle_buffer_size: int = 2048,
         validset: Dataset = None,
         validset_size: int = None,
     ):
@@ -419,12 +464,25 @@ class Vit(MLModel):
         )
 
 
-    def predict(
+    def predict_reads(
         self,
         dataset: tf.data.Dataset,
     ):
-        pass
+        results = {}
+        cnt = 0
+        for instance_frags, reads_filepath in dataset:
+            reads_filepath = reads_filepath.numpy()[0].decode("utf-8")            
+            results.update({
+                reads_filepath: self.net.predict(instance_frags)
+            })
+            cnt += 1
+            if (cnt > 50):
+                break
+        return results
 
+
+    def get_model_summary(self):
+        return self.net.summary()
 
     ############################
     #### private functions #####
@@ -454,6 +512,13 @@ class Vit(MLModel):
         else:
             self.hps    : VitHPs    = VitHPs(hps)
 
+        self.ml_model_history: Dict = {
+            "current_epoch": 0,
+            "metrics": {},
+            "hps_changes": [],
+            "transfers": [],
+        }
+
 
     def _create_ml_model(self):
         # create the model
@@ -479,6 +544,15 @@ class Vit(MLModel):
 
         # load the weights
         self._load_weights()
+
+        # self._load_layers_configuration()
+
+        if os.path.exists(self._get_ml_model_history_path()):
+            self._load_ml_model_history()
+
+
+    def _get_ml_model_history_path(self):
+        return f"{self._get_ml_model_path()}/history.json"
 
 
     def _get_weights_path(self):
@@ -557,6 +631,44 @@ class Vit(MLModel):
             weights = [np.array(f[f'weight_{i}'][:]) for i in range(len(f.keys()))]
         self.net.set_weights(weights)
 
+
+    def _save_ml_model_history(self):
+        with open(self._get_ml_model_history_path(), "w") as f:
+            f.write(json.dumps(self.ml_model_history))
+
+
+    def _load_ml_model_history(self):
+        with open(self._get_ml_model_history_path(), "r") as f:
+            ml_model_history = json.loads(f.read())
+        
+        for key, value in ml_model_history.items():
+            if key in self.ml_model_history:
+                self.ml_model_history[key] = value
+
+
+    def _save_layers_configuration(self):
+        with open(f"{self._get_ml_model_path()}/layers_configuration.json", "w") as f:
+            config = {}
+            
+            # save layers_trainable
+            layers_trainable = []
+            for layer in self.net.layers:
+                # Save trainables
+                layers_trainable.append(layer.trainable) 
+            config["layers_trainable"] = layers_trainable
+            
+            f.write(json.dumps([layer.get_config() for layer in self.net.layers]))
+
+
+    def _load_layers_configuration(self):
+        with open(f"{self._get_ml_model_path()}/layers_configuration.json", "r") as f:
+            config = json.loads(f.read())
+        
+        # load layers_trainable
+        layers_trainable = config["layers_trainable"]
+        for i, layer in enumerate(self.net.layers):
+            layer.trainable = layers_trainable[i]
+
                
     def _ml_model_exists(self):
         if os.path.exists(self._get_ml_model_path()):
@@ -595,12 +707,25 @@ class VitSaveCallback(tf.keras.callbacks.Callback):
 
 
     def on_epoch_end(self, epoch, logs=None):
-        print(f"Epoch {epoch} ended, saving weights")
         for weights_view in self.vit.get_weights_views():
             if not weights_view in logs:
                 raise Exception(f"weights_view {weights_view} not found in logs")
-            print(f"Saving weights for {weights_view}")
             if f"val_{weights_view}" in logs:
                 self.vit.save(weights_view=weights_view, weights_view_value=logs[f"val_{weights_view}"])
             else:
                 self.vit.save(weights_view=weights_view, weights_view_value=logs[f"val_{weights_view}"])
+
+
+class VitSaveHistoryCallback(tf.keras.callbacks.Callback):
+    def __init__(
+        self,
+        vit: Vit
+    ):
+        super(VitSaveHistoryCallback, self).__init__()
+        self.vit = vit
+
+
+    def on_epoch_end(self, epoch, logs=None):
+        for metric in logs.keys():
+            self.vit.record_metric(epoch, metric, logs[metric])
+        self.vit.increment_epoch_and_save_history()

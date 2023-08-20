@@ -23,10 +23,9 @@ class Dataset(object):
         self,
         mapping: List[Tuple[Filepath, Label]],
         labels: List[Label] = None,
-        minhash_dataset: bool = False,
         load: Tuple[bool, Dirpath] = (False, None)
     ):
-        self._create_state(mapping, labels, minhash_dataset, ignore_mapping=load[0])
+        self._create_state(mapping, labels, ignore_mapping=load[0])
         if load[0]:
             self._load_state(load[1])
 
@@ -63,7 +62,7 @@ class Dataset(object):
             tf_dataset = tf_dataset.repeat(repeats)
         if shuffle_buffer_size:
             tf_dataset = tf_dataset.shuffle(shuffle_buffer_size)
-        tf_dataset = tf_dataset.ragged_batch(batch_size)
+        tf_dataset = tf_dataset.batch(batch_size)
         tf_dataset = tf_dataset.prefetch(tf.data.experimental.AUTOTUNE)
         return tf_dataset
         
@@ -74,6 +73,47 @@ class Dataset(object):
 
     def get_coverage(self):
         return self.coverage
+    
+
+    def set_substitution_rate(self, substitution_rate: float):
+        # Except if substitution rate is bigger than 1
+        if substitution_rate + self.deletion_rate + self.insertion_rate > 1:
+            raise Exception(
+                f"""Error rates must be between 0 and 1.
+                substitution_rate = {substitution_rate}\tdeletion_rate = {self.deletion_rate}\tinsertion_rate = {self.insertion_rate}"""
+            )
+        self.substitution_rate = substitution_rate
+
+    def set_insertion_rate(self, insertion_rate: float):
+        # Except if insertion rate is bigger than 1
+        if insertion_rate + self.deletion_rate + self.substitution_rate > 1:
+            raise Exception(
+                f"""Error rates must be between 0 and 1.
+                insertion_rate = {insertion_rate}\tdeletion_rate = {self.deletion_rate}\tsubstitution_rate = {self.substitution_rate}"""
+            )
+        self.insertion_rate = insertion_rate
+
+    
+    def set_deletion_rate(self, deletion_rate: float):
+        # Except if deletion rate is bigger than 1
+        if deletion_rate + self.insertion_rate + self.substitution_rate > 1:
+            raise Exception(
+                f"""Error rates must be between 0 and 1.
+                deletion_rate = {deletion_rate}\tinsertion_rate = {self.insertion_rate}\tsubstitution_rate = {self.substitution_rate}"""
+            )
+        self.deletion_rate = deletion_rate
+
+    
+    def get_substitution_rate(self):
+        return self.substitution_rate
+    
+
+    def get_insertion_rate(self):
+        return self.insertion_rate
+    
+
+    def get_deletion_rate(self):
+        return self.deletion_rate
 
 
     def set_read_length(self, length: int):
@@ -89,11 +129,18 @@ class Dataset(object):
     
     def get_frag_length(self):
         return self.frag_len
+    
+
+    def get_kmer_length(self):
+        return 16
 
 
     def set_num_frags(self, num_frags: int):
         # TODO: check validity of num_frags
         self.num_frags = num_frags
+
+    def get_num_frags(self):
+        return self.num_frags
 
 
     def existing_examples(self, examples: List[Tuple[Filepath, Label]]):
@@ -123,19 +170,23 @@ class Dataset(object):
         self,
         mapping: List[Tuple[Filepath, Label]],
         labels: List[Label],
-        minhash_dataset: bool,
         ignore_mapping: bool
     ):
         self.coverage = 5
-        self.read_length = 128
-        self.frag_len = 128
-        self.num_frags = 256
+        self.substitution_rate = 0
+        self.insertion_rate = 0
+        self.deletion_rate = 0
+        self.read_length = 150
+        self.frag_len = 86
+        self.num_frags = 400
+        self.kmer_length = 16
         self.base_tensor = tf.constant(['A', 'C', 'G', 'T'])
-        self.minhash_dataset = minhash_dataset
         self.mapping = []
         self.labels = []
         if not ignore_mapping:
             self._add_mapping(mapping, labels)
+
+        self.key = tf.random.stateless_uniform([1], minval=0, maxval=4**self.kmer_length, dtype=tf.int64, seed=[0,0])
             
 
     def _add_mapping(self, mapping: List[Tuple[Filepath, Label]], labels: List[Label]):
@@ -173,14 +224,20 @@ class Dataset(object):
         # set the state
         if "coverage" in serialized_obj:
             self.coverage = serialized_obj["coverage"]
+        if "substitution_rate" in serialized_obj:
+            self.substitution_rate = serialized_obj["substitution_rate"]
+        if "insertion_rate" in serialized_obj:
+            self.insertion_rate = serialized_obj["insertion_rate"]
+        if "deletion_rate" in serialized_obj:
+            self.deletion_rate = serialized_obj["deletion_rate"]
         if "read_length" in serialized_obj:
             self.read_length = serialized_obj["read_length"]
         if "frag_len" in serialized_obj:
             self.frag_len = serialized_obj["frag_len"]
         if "num_frags" in serialized_obj:
             self.num_frags = serialized_obj["num_frags"]
-        if "minhash_dataset" in serialized_obj:
-            self.minhash_dataset = serialized_obj["minhash_dataset"]       
+        if "kmer_length" in serialized_obj:
+            self.kmer_length = serialized_obj["kmer_length"]
         if not "mapping" in serialized_obj or not "labels" in serialized_obj:
             raise Exception(f"File {modelpath}/dataset.json does not contain mapping or labels.")
         self._add_mapping(serialized_obj["mapping"], serialized_obj["labels"])
@@ -190,17 +247,19 @@ class Dataset(object):
         accession_files_ds = tf.data.Dataset.from_tensor_slices([accession for accession, _ in self.mapping])
         raw_genomes_ds = accession_files_ds.map(self._process_path, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         genomes_ds = raw_genomes_ds.map(self._clean_raw_genome, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        if not self.minhash_dataset:
-            frags_ds = genomes_ds.map(self._extract_frags_from_genome, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        else:
-            frags_ds = genomes_ds.map(self._extract_minhashed_frags_from_genome, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        sparse_frags_ds = frags_ds.map(self._add_sparsity_to_frags, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        return sparse_frags_ds.map(self._encode_frags, num_parallel_calls=tf.data.experimental.AUTOTUNE)
-        return genomes_ds
+        del_genomes = genomes_ds.map(self._add_deletions, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        subs_genomes = del_genomes.map(self._add_substitutions, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        ins_genomes = subs_genomes.map(self._add_insertions, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        chosen_kmers_ds = ins_genomes.map(self._get_kmers_to_consider, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        minhashed_frags_from_reads_ds = chosen_kmers_ds.map(
+            self._extract_minhashed_frags_from_genome,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+        return minhashed_frags_from_reads_ds.map(self._encode_frags, num_parallel_calls=tf.data.experimental.AUTOTUNE)
 
 
     def _get_labels_dataset(self):
-        labels_ds = tf.data.Dataset.from_tensor_slices([label for accession, label in self.mapping])
+        labels_ds = tf.data.Dataset.from_tensor_slices([label for _, label in self.mapping])
         labels_ds = labels_ds.map(self._encode_labels, num_parallel_calls=tf.data.experimental.AUTOTUNE)
         return labels_ds
 
@@ -219,30 +278,85 @@ class Dataset(object):
         # Remove empty lines
         genome = tf.strings.regex_replace(genome, '^>', 'N' * self.frag_len)
         return genome
-
-
-    @tf.function
-    def _add_sparsity_to_frags(self, genome, genome_length):
-        return tf.where(self._is_frag_base_covered_by_read(genome_length), genome, 'N')
-
-
-    @tf.function
-    def _extract_frags_from_genome(self, genome):
-        genome_len = tf.strings.length(genome)
-        # assert contig_len >= frag_len, "contig is too short to extract fragments from"
-        # Choose a random fragment
-        start_indices = tf.random.uniform(
-            shape=[self.num_frags],
-            minval=0,
-            maxval=genome_len - self.frag_len,
-            dtype=tf.dtypes.int32
-        )
-        return tf.strings.bytes_split(tf.strings.substr(genome, start_indices, [self.frag_len] * self.num_frags)).to_tensor(), genome_len
-
     
+
     @tf.function
-    def _extract_minhashed_frags_from_genome(self, genome):
-        kmer_size = 16
+    def _add_substitutions(self, genome):
+        if self.substitution_rate == 0:
+            return genome
+
+        # Split the genome into bytes
+        orig_bases = tf.strings.bytes_split(genome)
+        
+        # randomize bases from [A,C,G,T] in the size of orig_bases
+        random_indices = tf.random.uniform(shape=[tf.strings.length(genome)], minval=0, maxval=4, dtype=tf.int32)
+        random_bases = tf.gather(self.base_tensor, random_indices)
+
+        # Randomize substitution events
+        substitution_event = tf.random.uniform(shape=[tf.strings.length(genome)], minval=0, maxval=1, dtype=tf.float32) < self.substitution_rate
+
+        # Build new genome
+        new_bases = tf.where(substitution_event, random_bases, orig_bases)
+
+        return tf.strings.reduce_join(new_bases)
+    
+
+    def _add_insertions(self, genome):
+        """
+        1. Split the genome into bytes
+        2. randomize indel events, use tf.cumsum to update the positions of the genome
+        3. use scatter to build new genome of size (genome + number of indel events)
+        4. randomize bases for the indel events
+        4. use tf.where to build the new genome
+        """
+        # Split the genome into bytes
+        orig_bases = tf.strings.bytes_split(genome)
+
+        # Randomize indel events
+        indel_event = tf.random.uniform(shape=[tf.strings.length(genome)], minval=0, maxval=1, dtype=tf.float32) < self.insertion_rate
+
+        # Update the positions of the genome
+        cumsum = tf.cumsum(tf.cast(indel_event, tf.int32))
+        positions = cumsum + tf.range(tf.strings.length(genome))
+
+        # Build new genome
+        scattered_orig_bases = tf.scatter_nd(tf.expand_dims(positions, axis=1), orig_bases, [tf.strings.length(genome) + cumsum[-1]])
+
+        # Randomize bases for the indel events
+        random_indices = tf.random.uniform(
+            shape=[tf.strings.length(genome) + cumsum[-1]],
+            minval=0,
+            maxval=4,
+            dtype=tf.int32
+        )
+        random_bases = tf.gather(self.base_tensor, random_indices)
+
+        # update indel event dimenstions
+        indel_event = tf.concat([indel_event, tf.zeros([cumsum[-1]], dtype=tf.bool)], axis=0)
+
+        return tf.strings.reduce_join(tf.where(indel_event, random_bases, scattered_orig_bases))
+
+
+
+    def _add_deletions(self, genome):
+        """
+        1. byte split the genome
+        2. randomize deletion events
+        3. use tf.where to build the new genome
+        """
+
+        # Split the genome into bytes
+        orig_bases = tf.strings.bytes_split(genome)
+
+        # Randomize deletion events
+        deletion_event = tf.random.uniform(shape=[tf.strings.length(genome)], minval=0, maxval=1, dtype=tf.float32) < self.deletion_rate
+
+        # Build new genome
+        return tf.strings.reduce_join(tf.where(deletion_event, '', orig_bases))
+    
+
+    @tf.function
+    def _extract_minhashed_frags_from_genome(self, genome, kmers_to_consider):
         genome_len = tf.strings.length(genome)
 
         # define hash table
@@ -260,26 +374,31 @@ class Dataset(object):
         # Extract kmers
         num_kmers = genome_len - self.frag_len + 1
         kmers = tf.zeros([num_kmers], dtype = tf.int64)
-        for i in range(kmer_size):
+        for i in range(self.kmer_length):
             kmers += tf.cast(tf.roll(mapped_genome, shift=-1*i, axis=0)[:num_kmers] * tf.pow(5,i), tf.int64)
 
-        # Extract minhashes
-        # window_size = tf.cast(tf.math.divide_no_nan(
-        #     tf.cast(num_kmers, tf.float32), 
-        #     tf.cast(self.num_frags, tf.float32)),
-        # tf.int32)
-        # reshaped_kmers = tf.reshape(kmers[:self.num_frags*window_size], [self.num_frags, window_size])
-        # hashed_kmers = tf.strings.to_hash_bucket_fast(tf.strings.as_string(reshaped_kmers), num_buckets=2**32)
-        # start_indices = tf.argmax(hashed_kmers, axis=1, output_type=tf.dtypes.int32) + (tf.range(self.num_frags, dtype=tf.int32) * window_size)
-        # xor kmers with uniform random salt
+        # hashed_kmers will be of size of the num_kmers
+        # xor hash function appllied as the minhash hashing function
         hashed_kmers = tf.bitwise.bitwise_xor(
             kmers,
-            tf.random.stateless_uniform([1], minval=0, maxval=4**kmer_size, dtype=tf.int64, seed=[0,0])
+            self.key
+        )
+
+        modified_hashed_kmers = tf.where(
+            kmers_to_consider[:num_kmers],
+            hashed_kmers,
+            -1 * (2 ** 63)
+        )
+
+        frags_to_extract = tf.math.minimum(
+            self.num_frags,
+            tf.reduce_sum(tf.cast(kmers_to_consider[:num_kmers], dtype=tf.int32))
         )
         
-        start_indices = tf.math.top_k(hashed_kmers, k=self.num_frags).indices
+        start_indices = tf.math.top_k(modified_hashed_kmers, k=frags_to_extract).indices
 
-        return tf.strings.bytes_split(tf.strings.substr(genome, start_indices, [self.frag_len] * self.num_frags)).to_tensor(), genome_len
+        substr_length = tf.tile(tf.constant([self.frag_len]), [frags_to_extract])
+        return tf.strings.bytes_split(tf.strings.substr(genome, start_indices, substr_length)).to_tensor()
 
 
 
@@ -295,10 +414,11 @@ class Dataset(object):
 
 
     @tf.function
-    def _is_frag_base_covered_by_read(
+    def _get_kmers_to_consider(
         self,
-        genome_length
+        genome
     ):
+        genome_length = tf.strings.length(genome)
         num_reads = tf.cast(tf.math.divide_no_nan(tf.math.multiply(
             tf.cast(self.coverage, dtype=tf.float32),
             tf.cast(genome_length, dtype=tf.float32)
@@ -311,34 +431,31 @@ class Dataset(object):
         # Build a True/False tensor that states for each base in the fragment, weather a covering read starts with it or not.
         base_has_starting_read = tf.random.uniform(
             # Add read_length - 1 padding at the left of the fragment to cover all bases with identical probability
-            [self.num_frags, self.frag_len + self.read_length - 1], 
+            [genome_length - self.read_length + 1], 
             minval=0,
             maxval=1,
             dtype=tf.dtypes.float64
         ) >= read_does_not_start_with_base_prob
 
+        base_has_starting_read = tf.concat(
+            [
+                base_has_starting_read,
+                tf.zeros(self.read_length - 1, dtype=tf.dtypes.bool),
+            ],
+            axis=-1
+        )
+
         # Calculate which bases are covered by the read.
         shift = 1
-        base_covered_by_read = base_has_starting_read # 255 bases long
-        while(shift < self.read_length):
+        kmers_to_consider = base_has_starting_read #
+        while(shift < self.read_length - self.frag_len):
             # calculate weather the base will be covered by a read.
-            rolled = tf.roll(base_covered_by_read, shift=shift, axis=-1) # does not change the shape
-            rolled_with_zeros = tf.concat([tf.zeros(rolled.shape[:-1] + min(self.read_length - 1, shift)) == 1, rolled[:, shift:]], axis=-1) #
-            base_covered_by_read = rolled_with_zeros | base_covered_by_read
+            rolled = tf.roll(kmers_to_consider, shift=shift, axis=-1) # does not change the shape
+            kmers_to_consider = rolled | kmers_to_consider
             shift *= 2
         
         # return only the fragment covered-or-not bases
-        return base_covered_by_read[:, self.read_length - 1:]
-
-
-    def _sparse_frags_generator(self):
-        #iterate over all provided files
-        for fasta_filepath, label in self.mapping:
-            genome, genome_length = self._extract_genome_from_file(fasta_filepath)
-            frags = self._extract_frags_from_genome(genome, genome_length) # THE BUG IS HERE
-            # frags = self._generate_random_frags()
-            frag_base_covered_by_read = self._is_frag_base_covered_by_read(genome_length)
-            yield self._encode_frags(tf.where(frag_base_covered_by_read, frags, 0)), self._get_label_one_hot(label)
+        return genome, kmers_to_consider
 
     
     def _get_labels_tensor(self):
@@ -356,10 +473,13 @@ class Dataset(object):
     def _serialize(self):
         return {
             "coverage": self.coverage,
+            "substitution_rate": self.substitution_rate,
+            "insertion_rate": self.insertion_rate,
+            "deletion_rate": self.deletion_rate,
             "read_length": self.read_length,
             "frag_len": self.frag_len,
             "num_frags": self.num_frags,
-            "minhash_dataset": self.minhash_dataset,
+            "kmer_length": self.kmer_length,
             "mapping": self.mapping,
             "labels": self.labels
         }

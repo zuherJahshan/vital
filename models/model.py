@@ -12,14 +12,17 @@ os.chdir(f"{__ORIG_WD__}/../utils/")
 from utils import sub_dirpath_of_dirpath
 
 os.chdir(f"{__ORIG_WD__}/../dataset/")
-from dataset import Dataset, load_dataset, remove_dataset
+from mh_reads_ds import Dataset, load_dataset, remove_dataset
+from prod_reads_ds import ProdReadsDS
 
 os.chdir(f"{__ORIG_WD__}/ml_models/")
 
 from ml_model import MLModel
-from ml_models import get_ml_model_constructor
+from __init__ import get_ml_model_constructor 
 
 os.chdir(__ORIG_WD__)
+
+
 
 
 Filepath = str
@@ -51,9 +54,6 @@ class Model(object):
     def __init__(self, name, data_dir = "./data", load = False):
         # create models_dir in case it does not exist
         os.makedirs(data_dir, exist_ok=True)
-        
-        if sub_dirpath_of_dirpath(os.getcwd(), data_dir) == False:
-            raise Exception(f"data_dir {data_dir} is not a subdirectory of the current working directory {os.getcwd()}")
         
         self._createModelState(name, data_dir)
         if os.path.exists(self._get_model_path()):
@@ -97,18 +97,16 @@ class Model(object):
             trainset, validset, testset = self._create_example_label_mapping(dataset, portions)
 
             # create datasets
-            self.datasets[DatasetName.trainset.name] = Dataset(trainset, minhash_dataset=minhash_dataset)
+            self.datasets[DatasetName.trainset.name] = Dataset(trainset)
             self.datasets[DatasetName.trainset.name].save(f"{self._get_model_path()}/{DatasetName.trainset.name}")
             self.datasets[DatasetName.validset.name] = Dataset(
                 mapping=validset,
                 labels=self.datasets[DatasetName.trainset.name].get_labels(),
-                minhash_dataset=minhash_dataset
             )
             self.datasets[DatasetName.validset.name].save(f"{self._get_model_path()}/{DatasetName.validset.name}")
             self.datasets[DatasetName.testset.name] = Dataset(
                 testset,
                 labels=self.datasets[DatasetName.trainset.name].get_labels(),
-                minhash_dataset=minhash_dataset
             )
             self.datasets[DatasetName.testset.name].save(f"{self._get_model_path()}/{DatasetName.testset.name}")
 
@@ -120,6 +118,35 @@ class Model(object):
         # then change the coverage
         for dataset in self.datasets:
             self.datasets[dataset].set_coverage(coverage)
+            self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
+
+    
+    def set_substitution_rate(self, substitution_rate: float):
+        # refresh datasets, to force the creation of the tf.graph
+        self._load_datasets()
+        
+        # then change the coverage
+        for dataset in self.datasets:
+            self.datasets[dataset].set_substitution_rate(substitution_rate)
+            self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
+
+    def set_insertion_rate(self, insertion_rate: float):
+        # refresh datasets, to force the creation of the tf.graph
+        self._load_datasets()
+        
+        # then change the coverage
+        for dataset in self.datasets:
+            self.datasets[dataset].set_insertion_rate(insertion_rate)
+            self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
+
+
+    def set_deletion_rate(self, deletion_rate: float):
+        # refresh datasets, to force the creation of the tf.graph
+        self._load_datasets()
+        
+        # then change the coverage
+        for dataset in self.datasets:
+            self.datasets[dataset].set_deletion_rate(deletion_rate)
             self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
 
 
@@ -256,7 +283,8 @@ class Model(object):
     def evaluate(
         self,
         name,
-        dataset_name = DatasetName.validset.name
+        dataset_name = DatasetName.validset.name,
+        dataset = None
     ):
         if not self._ml_model_exists(name):
             raise Exception(f"ML model {name} does not exist.")
@@ -267,31 +295,80 @@ class Model(object):
 
         self.set_frag_len(self.ml_models[name].get_hps().get("d_model"))
             
+        if dataset_name != None:
+            dataset = self.datasets[dataset_name]
         return self.ml_models[name].evaluate(
-            self.datasets[dataset_name],
-            self.datasets[dataset_name].get_size()
+            dataset,
+            dataset.get_size()
         )
+
+
+    def get_testset_examples(
+        self,
+    ):
+        return self.datasets[DatasetName.testset.name].get_examples_filepaths_and_labels()
 
 
     def test(
         self,
-        name
+        name,
+        file_mapping: List[Tuple[Filepath, Label]]
     ):
-        return self.evaluate(name, dataset_name=DatasetName.testset.name)
+        #return self.evaluate(name, dataset_name=DatasetName.testset.name)
+        # get the testset filepaths
+
+        # build the minhash dataset
+        minhash_dataset = Dataset(
+            mapping=file_mapping,
+            labels=self.datasets[DatasetName.trainset.name].get_labels(),
+        )
+        minhash_dataset.set_coverage(200)
+        return self.evaluate(name, dataset_name=None, dataset=minhash_dataset)
 
 
-    def predict(
+    def predict_reads(
         self,
         name,
-        fasta_dirpath: str
+        fastq_dirpath: str
     ):
-        pass
+        if not name in self.ml_models:
+            # load the model
+            self._load_ml_model(name)
+        
+        prod_reads_ds = ProdReadsDS(
+            kmer_len = self.datasets[DatasetName.trainset.name].get_kmer_length(),
+            frag_len = self.datasets[DatasetName.trainset.name].get_frag_length(),
+            num_frags = self.datasets[DatasetName.trainset.name].get_num_frags(),
+        )
+
+        return self.ml_models[name].predict_reads(
+            prod_reads_ds.get_tf_dataset(fastq_dirpath)
+        )
+
+
+
+        
+
+
+    def get_model_summary(
+        self,
+        ml_model_name
+    ):
+        if not self._ml_model_exists(ml_model_name):
+            raise Exception(f"ML model {ml_model_name} does not exist.")
+        
+        if not ml_model_name in self.ml_models:
+            # load the model
+            self._load_ml_model(ml_model_name)
+
+        return self.ml_models[ml_model_name].get_model_summary()
 
 
     def transfer(
         self,
         transfer_from_name,
         transfer_to_name,
+        copied_trainable: bool = False,
     ) -> List[str]:
         if not self._ml_model_exists(transfer_from_name):
             raise Exception(f"ML model {transfer_from_name} does not exist.")
@@ -301,7 +378,7 @@ class Model(object):
         self._load_ml_model(transfer_from_name)
         self._load_ml_model(transfer_to_name)
 
-        return self.ml_models[transfer_to_name].transfer(self.ml_models[transfer_from_name])
+        return self.ml_models[transfer_to_name].transfer(self.ml_models[transfer_from_name], copied_trainable)
     ############################
     #### private functions #####
     ############################
@@ -323,32 +400,6 @@ class Model(object):
         self
     ):
         self._load_datasets() # Will fill self.datasets
-
-
-    # def _create_dataset(
-    #     self,
-    #     mapping: List[Tuple[Label, List[Filepath]]],
-    #     dataset_name: str
-    # ):
-    #     # Create and save the mapping.
-    #     print(f"Creating dataset {dataset_name}...")
-    #     self.mappings[dataset_name] = []
-    #     json_obj = {}
-    #     for label, accessions in mapping:
-    #         json_obj[label] = accessions
-    #         for accession in accessions:
-    #             self.mappings[dataset_name].append((accession, label))
-
-    #     random.shuffle(self.mappings[dataset_name]) # should be discarded and be handled in the dataset
-
-    #     # Create the dataset itself
-    #     dataset = Dataset()
-    #     dataset.set_labels(list(json_obj.keys()))
-    #     self.datasets[dataset_name] = dataset.get_tf_dataset(self.mappings[dataset_name])
-        
-    #     # Persist the mapping to disk
-    #     with open(self._get_dataset_json_filename(dataset_name), "w") as f:
-    #         f.write(json.dumps(json_obj))
 
 
     def _load_datasets(
@@ -428,7 +479,7 @@ class Model(object):
 
 def load_model(name, data_dir = "./data") -> Model:
     if os.path.exists(f"{data_dir}/{name}"):
-        return Model(name, load=True)
+        return Model(name, data_dir=data_dir, load=True)
     else:
         raise Exception(f"Model {name} does not exist.")
 

@@ -19,6 +19,11 @@ class MLModel(ABC):
 
 
     @abstractmethod
+    def get_name():
+        pass
+
+
+    @abstractmethod
     def get_net():
         pass
 
@@ -47,15 +52,6 @@ class MLModel(ABC):
         dataset_size: int
     ):
         # dataset here comes with the labels
-        pass
-
-    
-    @abstractmethod
-    def predict(
-        self,
-        dataset: tf.data.Dataset,
-    ):
-        # dataset here comes without the labels
         pass
 
 
