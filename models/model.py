@@ -8,17 +8,16 @@ import shutil
 
 __ORIG_WD__ = os.getcwd()
 
+
 os.chdir(f"{__ORIG_WD__}/../utils/")
 from utils import sub_dirpath_of_dirpath
 
-os.chdir(f"{__ORIG_WD__}/../dataset/")
-from mh_reads_ds import Dataset, load_dataset, remove_dataset
-from prod_reads_ds import ProdReadsDS
+os.chdir(f"{__ORIG_WD__}/../dataset")
+from __init__ import *
 
 os.chdir(f"{__ORIG_WD__}/ml_models/")
 
-from ml_model import MLModel
-from __init__ import get_ml_model_constructor 
+from ml_model import MLModel, ml_model_structures
 
 os.chdir(__ORIG_WD__)
 
@@ -63,13 +62,19 @@ class Model(object):
                 raise Exception(f"Model {name} already exists, please use load_model(name) instead")
             
 
+###########################################
+############ Dataset Methods ##############
+###########################################
+    def get_ds_types(self):
+        return get_dataset_types()
+
+
     def create_datasets(
         self,
+        dataset_type: str,
         dataset: List[Tuple[Label, List[Filepath]]],
         portions: Dict[DatasetName, float],
         force_creation: bool = False,
-        minhash_dataset: bool = False 
-
     ):
         '''
         1. check validity of parameters
@@ -94,70 +99,62 @@ class Model(object):
             # Create new folder if needed.
             os.makedirs(self._get_model_path(), exist_ok=True)
 
+            print("Creating example-label mapping...")
             trainset, validset, testset = self._create_example_label_mapping(dataset, portions)
+            print("Done.")
 
             # create datasets
-            self.datasets[DatasetName.trainset.name] = Dataset(trainset)
+            print("Creating trainset")
+            self.datasets[DatasetName.trainset.name] = create_dataset(dataset_type, trainset)
             self.datasets[DatasetName.trainset.name].save(f"{self._get_model_path()}/{DatasetName.trainset.name}")
-            self.datasets[DatasetName.validset.name] = Dataset(
+            print("Done.")
+
+            print("Creating validset")
+            self.datasets[DatasetName.validset.name] = create_dataset(
+                dataset_type,
                 mapping=validset,
                 labels=self.datasets[DatasetName.trainset.name].get_labels(),
             )
             self.datasets[DatasetName.validset.name].save(f"{self._get_model_path()}/{DatasetName.validset.name}")
-            self.datasets[DatasetName.testset.name] = Dataset(
+            print("Done.")
+
+            print("Creating testset")
+            self.datasets[DatasetName.testset.name] = create_dataset(
+                dataset_type,
                 testset,
                 labels=self.datasets[DatasetName.trainset.name].get_labels(),
             )
             self.datasets[DatasetName.testset.name].save(f"{self._get_model_path()}/{DatasetName.testset.name}")
+            print("Done.")
 
 
-    def set_coverage(self, coverage: int):
-        # refresh datasets, to force the creation of the tf.graph
+    def set_ds_batch_size(self, batch_size: int):
         self._load_datasets()
-        
-        # then change the coverage
-        for dataset in self.datasets:
-            self.datasets[dataset].set_coverage(coverage)
-            self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
+        for dataset in self.datasets.values():
+            dataset.set_batch_size(batch_size)
 
-    
-    def set_substitution_rate(self, substitution_rate: float):
-        # refresh datasets, to force the creation of the tf.graph
+
+    def get_ds_batch_size(self):
         self._load_datasets()
-        
-        # then change the coverage
-        for dataset in self.datasets:
-            self.datasets[dataset].set_substitution_rate(substitution_rate)
-            self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
+        return self.datasets[DatasetName.trainset.name].get_batch_size()
 
-    def set_insertion_rate(self, insertion_rate: float):
-        # refresh datasets, to force the creation of the tf.graph
+
+    def get_labels(self):
+        return self.datasets[DatasetName.trainset.name].get_labels()
+
+
+    def get_ds_props(self):
+        return self.datasets[DatasetName.trainset.name].get_props()
+
+
+    def update_dataset_props(
+        self,
+        dataset_props: Dict
+    ):
         self._load_datasets()
-        
-        # then change the coverage
-        for dataset in self.datasets:
-            self.datasets[dataset].set_insertion_rate(insertion_rate)
-            self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
 
-
-    def set_deletion_rate(self, deletion_rate: float):
-        # refresh datasets, to force the creation of the tf.graph
-        self._load_datasets()
-        
-        # then change the coverage
-        for dataset in self.datasets:
-            self.datasets[dataset].set_deletion_rate(deletion_rate)
-            self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
-
-
-    def set_frag_len(self, frag_len: int):
-            # refresh datasets, to force the creation of the tf.graph
-            self._load_datasets()
-            
-            # then change the coverage
-            for dataset in self.datasets:
-                self.datasets[dataset].set_frag_length(frag_len)    
-                self.datasets[dataset].save(f"{self._get_model_path()}/{dataset}")
+        for dataset in self.datasets.values():
+            dataset.update_props(dataset_props)
 
 
     def add_examples(self, dataset, portions):
@@ -176,10 +173,24 @@ class Model(object):
         self.datasets[DatasetName.testset.name].save(f"{self._get_model_path()}/{DatasetName.testset.name}")
 
 
+    def get_testset_examples(
+        self,
+    ):
+        return self.datasets[DatasetName.testset.name].get_examples_filepaths_and_labels()
+
+###########################################
+############ ML Model Methods #############
+###########################################
+    def get_ml_model_structures(self):
+        return list(ml_model_structures.keys())
+
+
+    def get_ml_model_structure_hps(self, ml_model_structure_name: str) -> Dict:
+        return MLModel.get_structure_hps(ml_model_structure_name)
+
 
     def add_ml_model(
         self,
-        ml_model_type: str,
         name: str,
         hps: Dict = {},
     ):
@@ -189,20 +200,14 @@ class Model(object):
         if self._ml_model_exists(name):
             raise Exception(f"ML model {name} already exists.")
         
-        os.makedirs(self._get_ml_model_path(name, ml_model_type), exist_ok=True)
+        os.makedirs(self._get_ml_model_path(name), exist_ok=True)
 
         # prepare hps for the model
-        base_hps = {
-            "labels": self.datasets[DatasetName.trainset.name].get_number_of_labels(),
-            "d_model": self.datasets[DatasetName.trainset.name].get_frag_length(),
-        }
-        for key, value in hps.items():
-            base_hps[key] = value
-
+        
         # create the ml_model (creation also saves the model)
-        ml_model = get_ml_model_constructor(ml_model_type)(
-            dirpath=self._get_ml_model_path(name, ml_model_type),
-            hps=base_hps,
+        ml_model = MLModel(
+            dirpath=self._get_ml_model_path(name),
+            hps=hps,
             name=name
         )
 
@@ -235,7 +240,7 @@ class Model(object):
         if name in self.ml_models:
             del self.ml_models[name]
         
-        shutil.rmtree(self._get_ml_model_path(name, self._get_model_type(name)))
+        shutil.rmtree(self._get_ml_model_path(name))
 
 
     def list_ml_models(
@@ -259,6 +264,39 @@ class Model(object):
         self.ml_models[name].save()
     
 
+    def get_model_summary(
+        self,
+        ml_model_name
+    ):
+        if not self._ml_model_exists(ml_model_name):
+            raise Exception(f"ML model {ml_model_name} does not exist.")
+        
+        if not ml_model_name in self.ml_models:
+            # load the model
+            self._load_ml_model(ml_model_name)
+
+        return self.ml_models[ml_model_name].get_model_summary()
+
+
+    def transfer(
+        self,
+        transfer_from_name,
+        transfer_to_name,
+        copied_trainable: bool = False,
+    ) -> List[str]:
+        if not self._ml_model_exists(transfer_from_name):
+            raise Exception(f"ML model {transfer_from_name} does not exist.")
+        if not self._ml_model_exists(transfer_to_name):
+            raise Exception(f"ML model {transfer_to_name} does not exist.")
+        
+        self._load_ml_model(transfer_from_name)
+        self._load_ml_model(transfer_to_name)
+
+        return self.ml_models[transfer_to_name].transfer(self.ml_models[transfer_from_name], copied_trainable)
+
+###########################################
+##### Training and Inference Methods ######
+###########################################
     def train(
         self,
         name: str,
@@ -303,12 +341,6 @@ class Model(object):
         )
 
 
-    def get_testset_examples(
-        self,
-    ):
-        return self.datasets[DatasetName.testset.name].get_examples_filepaths_and_labels()
-
-
     def test(
         self,
         name,
@@ -325,64 +357,9 @@ class Model(object):
         minhash_dataset.set_coverage(200)
         return self.evaluate(name, dataset_name=None, dataset=minhash_dataset)
 
-
-    def predict_reads(
-        self,
-        name,
-        fastq_dirpath: str
-    ):
-        if not name in self.ml_models:
-            # load the model
-            self._load_ml_model(name)
-        
-        prod_reads_ds = ProdReadsDS(
-            kmer_len = self.datasets[DatasetName.trainset.name].get_kmer_length(),
-            frag_len = self.datasets[DatasetName.trainset.name].get_frag_length(),
-            num_frags = self.datasets[DatasetName.trainset.name].get_num_frags(),
-        )
-
-        return self.ml_models[name].predict_reads(
-            prod_reads_ds.get_tf_dataset(fastq_dirpath)
-        )
-
-
-
-        
-
-
-    def get_model_summary(
-        self,
-        ml_model_name
-    ):
-        if not self._ml_model_exists(ml_model_name):
-            raise Exception(f"ML model {ml_model_name} does not exist.")
-        
-        if not ml_model_name in self.ml_models:
-            # load the model
-            self._load_ml_model(ml_model_name)
-
-        return self.ml_models[ml_model_name].get_model_summary()
-
-
-    def transfer(
-        self,
-        transfer_from_name,
-        transfer_to_name,
-        copied_trainable: bool = False,
-    ) -> List[str]:
-        if not self._ml_model_exists(transfer_from_name):
-            raise Exception(f"ML model {transfer_from_name} does not exist.")
-        if not self._ml_model_exists(transfer_to_name):
-            raise Exception(f"ML model {transfer_to_name} does not exist.")
-        
-        self._load_ml_model(transfer_from_name)
-        self._load_ml_model(transfer_to_name)
-
-        return self.ml_models[transfer_to_name].transfer(self.ml_models[transfer_from_name], copied_trainable)
-    ############################
-    #### private functions #####
-    ############################
-
+###########################################
+############ private functions ############
+###########################################
     def _createModelState(
         self,
         name,
@@ -440,8 +417,8 @@ class Model(object):
         return f"{self.data_dir}/{self.name}"
     
 
-    def _get_ml_model_path(self, name, model_type):
-        return f"{self._get_ml_models_path()}/{name}-{model_type}"
+    def _get_ml_model_path(self, name):
+        return f"{self._get_ml_models_path()}/{name}"
 
 
     def _load_ml_model(
@@ -451,9 +428,8 @@ class Model(object):
         if not self._ml_model_exists(name):
             raise Exception(f"ML model {name} does not exist.")
         
-        model_type = self._get_model_type(name)
-        self.ml_models[name] = get_ml_model_constructor(model_type)(
-            dirpath=self._get_ml_model_path(name, model_type),
+        self.ml_models[name] = MLModel(
+            dirpath=self._get_ml_model_path(name),
             name=name,
             load=True
         )
@@ -465,16 +441,10 @@ class Model(object):
 
     def _ml_model_exists(self, name):
         for ml_model_dirname in os.listdir(self._get_ml_models_path()):
-            if ml_model_dirname.split("-")[0] == name:
+            if ml_model_dirname == name:
                 return True
         return False
 
-
-    def _get_model_type(self, name):
-        for ml_model_dirname in os.listdir(self._get_ml_models_path()):
-            if ml_model_dirname.split("-")[0] == name:
-                return ml_model_dirname.split("-")[1]
-        return None
 
 
 def load_model(name, data_dir = "./data") -> Model:

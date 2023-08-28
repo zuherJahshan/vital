@@ -2,6 +2,7 @@ import os
 import tensorflow as tf
 import numpy as np
 import glob
+import random
 
 class ProdReadsDS(object):
     def __init__(
@@ -44,6 +45,8 @@ class ProdReadsDS(object):
     ) -> tf.Tensor:
         # extract fastq files from dirpath
         reads_file_pathes = glob.glob(os.path.join(dirpath, '*.fq')) + glob.glob(os.path.join(dirpath, '*.fastq'))
+        # shuffle reads_file_pathes
+        random.shuffle(reads_file_pathes)
         for reads_file_path in reads_file_pathes:
             frags = self._get_frags(reads_file_path)
             yield frags, reads_file_path

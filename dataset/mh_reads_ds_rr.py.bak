@@ -1,0 +1,349 @@
+import tensorflow as tf
+import tensorflow_probability as tfp
+import os
+from typing import Iterator, List, Tuple
+import json
+import random
+
+__ORIG_WD__ = os.getcwd()
+
+os.chdir(f"{__ORIG_WD__}/../utils/")
+from utils import *
+
+os.chdir(__ORIG_WD__)
+
+Contig = tf.Tensor
+Label = str
+Filepath = str
+Dirpath = str
+Label = str
+
+
+class Dataset(object):
+    def __init__(
+        self,
+        mapping: List[Tuple[Filepath, Label]],
+        labels: List[Label] = None,
+        load: Tuple[bool, Dirpath] = (False, None)
+    ):
+        self._create_state(mapping, labels, ignore_mapping=load[0])
+        if load[0]:
+            self._load_state(load[1])
+
+    
+    def get_labels(self):
+        return self.labels
+
+
+    def get_size(self):
+        return len(self.mapping)
+    
+
+    def get_number_of_labels(self):
+        return self.labels_tensor.shape[0]
+
+
+    def save(self, modelpath: Dirpath):
+        # Check that you are not overwriting an existing model
+        os.makedirs(modelpath, exist_ok=True)
+        
+        serialized_obj = self._serialize()
+        with open(f"{modelpath}/dataset.json", 'w') as f:
+            json.dump(serialized_obj, f)
+
+
+    def get_tf_dataset(self,
+                       repeats: int = None,
+                       shuffle_buffer_size: int = None,
+                       batch_size: int = 32,):
+        tf_dataset = tf.data.Dataset.zip((self._get_tf_examples_dataset(), self._get_labels_dataset()))
+        if repeats == None:
+            tf_dataset = tf_dataset.repeat()
+        else:
+            tf_dataset = tf_dataset.repeat(repeats)
+        if shuffle_buffer_size:
+            tf_dataset = tf_dataset.shuffle(shuffle_buffer_size)
+        tf_dataset = tf_dataset.batch(batch_size)
+        tf_dataset = tf_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+        return tf_dataset
+        
+
+    def set_coverage(self, coverage: float):
+        self.coverage = coverage
+
+
+    def get_coverage(self):
+        return self.coverage
+
+
+    def set_read_length(self, length: int):
+        # make length a power of two
+        length = 2 ** (length - 1).bit_length()
+        self.read_length = length
+
+
+    def set_frag_length(self, length: int):
+        # TODO: check validity of length
+        self.frag_len = length
+
+    
+    def get_frag_length(self):
+        return self.frag_len
+    
+
+    def get_kmer_length(self):
+        return 16
+
+
+    def set_num_frags(self, num_frags: int):
+        # TODO: check validity of num_frags
+        self.num_frags = num_frags
+
+
+    def get_num_frags(self):
+        return self.num_frags
+
+
+    def existing_examples(self, examples: List[Tuple[Filepath, Label]]):
+        # checks if the following examples exist in the dataset
+        existing_examples = []
+        dataset_examples = set([filepath for filepath, _ in self.mapping])
+        for example, _ in examples:
+            if example in dataset_examples:
+                existing_examples.append(example)
+        return existing_examples
+    
+
+    def add_examples(self, examples: List[Tuple[Filepath, Label]]):
+        if len(self.existing_examples(examples)) > 0:
+            raise Exception("Some examples already exist in the dataset.")
+        self._add_mapping(examples, None)
+
+
+    def get_examples_filepaths_and_labels(self):
+        return self.mapping
+
+
+    #############################
+    ### Private Methods Below ###
+    #############################
+    def _create_state(
+        self,
+        mapping: List[Tuple[Filepath, Label]],
+        labels: List[Label],
+        ignore_mapping: bool
+    ):
+        self.coverage = 5
+        self.frag_len = 86
+        self.num_frags = 400
+        self.kmer_length = 16
+        self.base_tensor = tf.constant(['A', 'C', 'G', 'T'])
+        self.mapping = []
+        self.labels = []
+        if not ignore_mapping:
+            self._add_mapping(mapping, labels)
+
+        self.key = tf.random.stateless_uniform([1], minval=0, maxval=4**self.kmer_length, dtype=tf.int64, seed=[0,0])
+            
+
+    def _add_mapping(self, mapping: List[Tuple[Filepath, Label]], labels: List[Label]):
+        
+        # update the mappings
+        self._check_mapping_validity(mapping)
+        random.shuffle(mapping)
+        self.mapping: List[Tuple[Filepath, Label]] = mapping
+        
+        # update the labels
+        existing_labels_set = set(self.labels)
+        if not labels:
+            new_labels_set = set([label for _, label in mapping])
+        else:
+            new_labels_set = set(labels)
+        existing_labels_set.update(new_labels_set)
+        self.labels = list(existing_labels_set)
+        self.labels.sort()
+
+        # update the labels tensor
+        self.labels_tensor = self._get_labels_tensor()
+            
+
+    def _load_state(self, modelpath):
+        # load the jsonj from the modelpath
+        
+        # check that appropriate files exist
+        if not os.path.exists(f"{modelpath}/dataset.json"):
+            raise Exception(f"File {modelpath}/dataset.json does not exist.")
+        
+        # load the json
+        with open(f"{modelpath}/dataset.json", 'r') as f:
+            serialized_obj = json.load(f)
+
+        # set the state
+        if "coverage" in serialized_obj:
+            self.coverage = serialized_obj["coverage"]
+        if "frag_len" in serialized_obj:
+            self.frag_len = serialized_obj["frag_len"]
+        if "num_frags" in serialized_obj:
+            self.num_frags = serialized_obj["num_frags"]
+        if "kmer_length" in serialized_obj:
+            self.kmer_length = serialized_obj["kmer_length"]
+        if not "mapping" in serialized_obj or not "labels" in serialized_obj:
+            raise Exception(f"File {modelpath}/dataset.json does not contain mapping or labels.")
+        self._add_mapping(serialized_obj["mapping"], serialized_obj["labels"])
+        
+
+    def _get_tf_examples_dataset(self):
+        accession_files_ds = tf.data.Dataset.from_tensor_slices([accession for accession, _ in self.mapping])
+        raw_reads_ds = accession_files_ds.map(self._process_path, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        cleaned_raw_reads_ds = raw_reads_ds.map(self._clean_raw_reads, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        chosen_kmers_ds = cleaned_raw_reads_ds.map(self._get_kmers_to_consider, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        minhashed_frags_from_reads_ds = chosen_kmers_ds.map(
+            self._extract_minhashed_frags_from_genome,
+            num_parallel_calls=tf.data.experimental.AUTOTUNE
+        )
+        return minhashed_frags_from_reads_ds.map(self._encode_frags, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+
+
+    def _get_labels_dataset(self):
+        labels_ds = tf.data.Dataset.from_tensor_slices([label for _, label in self.mapping])
+        labels_ds = labels_ds.map(self._encode_labels, num_parallel_calls=tf.data.experimental.AUTOTUNE)
+        return labels_ds
+
+
+    @tf.function
+    def _process_path(self, file_path):
+        return tf.io.read_file(file_path)
+
+
+    @tf.function
+    def _clean_raw_reads(self, fastq_data):
+        # Remove descriptor lines
+        lines = tf.strings.split(fastq_data, '\n')
+
+        return lines[1::4]
+    
+    
+    @tf.function
+    def _get_kmers_to_consider(
+        self,
+        reads
+    ):
+        concatenated_reads = tf.strings.reduce_join(reads)
+        reads_lengths = tf.strings.length(reads)
+        cumsum_reads_lengths = tf.math.cumsum(reads_lengths)
+        indices_of_read_start_in_concatinated_reads = cumsum_reads_lengths - reads_lengths
+        duplicate_cumsum = tf.math.cumsum(tf.scatter_nd(
+            indices=tf.expand_dims(indices_of_read_start_in_concatinated_reads, axis=1),
+            updates=reads_lengths,
+            shape=[tf.strings.length(concatenated_reads)]
+        ))
+        sequence_len_from_here = duplicate_cumsum - tf.range(tf.strings.length(concatenated_reads))
+
+        return concatenated_reads, sequence_len_from_here >= self.frag_len
+
+
+    @tf.function
+    def _extract_minhashed_frags_from_genome(self, concatenated_reads, kmers_to_consider):
+        reads_length = tf.strings.length(concatenated_reads)
+
+        # define hash table
+        keys = tf.constant(["A", "C", "G", "T"])
+        values = tf.constant([1, 2, 3, 4], dtype=tf.int32)
+        default_value = tf.constant(0, dtype=tf.int32)
+        initializer = tf.lookup.KeyValueTensorInitializer(keys, values)
+
+        # Define the hash table
+        table = tf.lookup.StaticHashTable(initializer, default_value)
+
+        # Look up the values
+        mapped_reads = table.lookup(tf.strings.bytes_split(concatenated_reads))
+
+        # Extract kmers
+        num_kmers = reads_length - self.frag_len + 1
+        kmers = tf.zeros([num_kmers], dtype = tf.int64)
+        for i in range(self.kmer_length):
+            kmers += tf.cast(tf.roll(mapped_reads, shift=-1*i, axis=0)[:num_kmers] * tf.pow(5,i), tf.int64)
+
+        # hashed_kmers will be of size of the num_kmers
+        # xor hash function appllied as the minhash hashing function
+        hashed_kmers = tf.bitwise.bitwise_xor(
+            kmers,
+            self.key
+        )
+
+        min_hashed_kmer = tf.math.reduce_min(hashed_kmers)
+
+        # modify hash kmers so that kmers_to_consider False values are replaced with min_hashed_kmer to not be considered. see code below
+        modified_hashed_kmers = tf.where(
+            kmers_to_consider[:num_kmers],
+            hashed_kmers,
+            min_hashed_kmer
+        )
+        
+        # Sort hashed kmers and remove duplicates
+        hashed_kmers = tf.sort(modified_hashed_kmers, direction='DESCENDING')
+        # shift hashed kmers by 1 to the right
+        rolled_hashed_kmers = tf.roll(hashed_kmers, shift=1, axis=0)
+        participating_kmers = tf.not_equal(hashed_kmers, rolled_hashed_kmers)
+        # make sure, at most num_frags kmers are participating
+        participating_kmers &= tf.cumsum(tf.cast(participating_kmers, dtype=tf.int32)) <= self.num_frags
+
+        # Choose indices of the participating kmers
+        start_indices = tf.argsort(modified_hashed_kmers, direction='DESCENDING')
+        masked_start_indices = tf.boolean_mask(start_indices, participating_kmers)
+
+        # Extract the chosen frags
+        frags_to_extract = tf.reduce_sum(tf.cast(participating_kmers, dtype=tf.int32))
+        substr_length = tf.tile(tf.constant([self.frag_len]), [frags_to_extract])
+        chosen_frags = tf.strings.bytes_split(tf.strings.substr(concatenated_reads, masked_start_indices, substr_length)).to_tensor()
+
+        # pad chosen frags with N's to match the size self.frag_len*self.num_frags
+        chosen_frags = tf.pad(chosen_frags, [[0, self.num_frags - frags_to_extract], [0, 0]], constant_values='N')
+        # return chosen_frags
+        return chosen_frags
+
+
+    @tf.function
+    def _encode_frags(self, genome):
+        genome = tf.reshape(genome, [self.num_frags, self.frag_len, 1])
+        return tf.cast(tf.equal(genome, self.base_tensor), dtype=tf.dtypes.int32)
+
+
+    @tf.function
+    def _encode_labels(self, label):
+        return tf.cast(tf.equal(label, self.labels_tensor), dtype=tf.dtypes.int32)
+
+    
+    def _get_labels_tensor(self):
+        return tf.constant(self.labels)
+
+
+    def _check_mapping_validity(self, mapping):
+        for filepath, label in mapping:
+            if not os.path.exists(filepath):
+                raise Exception(f"File {filepath} does not exist.")
+            if not is_fastq_file(filepath):
+                raise Exception(f"File {filepath} is not a fasta file.")
+
+
+    def _serialize(self):
+        return {
+            "coverage": self.coverage,
+            "frag_len": self.frag_len,
+            "num_frags": self.num_frags,
+            "kmer_length": self.kmer_length,
+            "mapping": self.mapping,
+            "labels": self.labels
+        }
+
+
+def load_dataset(modelpath: Dirpath) -> Dataset:
+    if os.path.exists(f"{modelpath}/dataset.json"):
+        return Dataset(mapping = None, load=(True, modelpath))
+    else:
+        raise Exception(f"File {modelpath}/dataset.json does not exist.")
+
+
+def remove_dataset(modelpath: Dirpath) -> None:
+    if os.path.exists(f"{modelpath}/dataset.json"):
+        os.remove(f"{modelpath}/dataset.json")

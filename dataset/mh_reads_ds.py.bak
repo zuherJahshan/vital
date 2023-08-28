@@ -1,4 +1,5 @@
 import tensorflow as tf
+import tensorflow_probability as tfp
 import os
 from typing import Iterator, List, Tuple
 import json
@@ -314,6 +315,7 @@ class Dataset(object):
 
         # Randomize indel events
         indel_event = tf.random.uniform(shape=[tf.strings.length(genome)], minval=0, maxval=1, dtype=tf.float32) < self.insertion_rate
+        # number_of_indels = tf.random.uniform(shape=[tf.strings.length(genome)], minval=1, maxval=10, dtype=tf.int32) * indel_event
 
         # Update the positions of the genome
         cumsum = tf.cumsum(tf.cast(indel_event, tf.int32))
@@ -426,7 +428,10 @@ class Dataset(object):
 
         ## Assume areas from which fragments will be taken must be covered by reads - hence probabilty will change.
         covered_areas = tf.math.minimum(genome_length, self.frag_len* self.num_frags) # O(1)
-        read_does_not_start_with_base_prob = tf.math.pow(((covered_areas - 1) / covered_areas), tf.cast(num_reads, dtype=tf.float64))
+        # randomize a vector that adds up to one of size genome_length
+        dirichlet = tfp.distributions.Dirichlet(concentration=tf.ones(genome_length - self.read_length + 1))
+        chance_to_be_covered = tf.cast(dirichlet.sample(), dtype=tf.float64)
+        read_does_not_start_with_base_prob = tf.math.pow(1 - chance_to_be_covered, tf.cast(num_reads, dtype=tf.float64))
 
         # Build a True/False tensor that states for each base in the fragment, weather a covering read starts with it or not.
         base_has_starting_read = tf.random.uniform(
