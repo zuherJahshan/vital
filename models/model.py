@@ -200,13 +200,13 @@ class Model(object):
         if self._ml_model_exists(name):
             raise Exception(f"ML model {name} already exists.")
         
-        os.makedirs(self._get_ml_model_path(name), exist_ok=True)
+        os.makedirs(self._get_ml_models_path(), exist_ok=True)
 
         # prepare hps for the model
         
         # create the ml_model (creation also saves the model)
         ml_model = MLModel(
-            dirpath=self._get_ml_model_path(name),
+            dirpath=self._get_ml_models_path(),
             hps=hps,
             name=name
         )
@@ -415,10 +415,6 @@ class Model(object):
         self,
     ):
         return f"{self.data_dir}/{self.name}"
-    
-
-    def _get_ml_model_path(self, name):
-        return f"{self._get_ml_models_path()}/{name}"
 
 
     def _load_ml_model(
@@ -429,7 +425,7 @@ class Model(object):
             raise Exception(f"ML model {name} does not exist.")
         
         self.ml_models[name] = MLModel(
-            dirpath=self._get_ml_model_path(name),
+            dirpath=self._get_ml_models_path(),
             name=name,
             load=True
         )

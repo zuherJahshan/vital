@@ -43,7 +43,7 @@ class HPs:
         
 
     def save_hps(self, dirpath):
-        with open(f"{dirpath}/hps.csv", "w") as f:
+        with open(f"{dirpath}/hps.json", "w") as f:
             f.write(json.dumps(self.hps))
 
 
@@ -107,5 +107,5 @@ class HPs:
 
 
     def _load_hps(self, filepath):
-        with open(f"{filepath}/hps.csv", "r") as f:
+        with open(f"{filepath}/hps.json", "r") as f:
             return json.loads(f.read())
