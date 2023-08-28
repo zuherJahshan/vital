@@ -147,7 +147,7 @@ class Model(object):
         return self.datasets[DatasetName.trainset.name].get_props()
 
 
-    def update_dataset_props(
+    def update_ds_props(
         self,
         dataset_props: Dict
     ):
@@ -157,7 +157,7 @@ class Model(object):
             dataset.update_props(dataset_props)
 
 
-    def add_examples(self, dataset, portions):
+    def add_ds_examples(self, dataset, portions):
         # refresh datasets, to force the creation of the tf.graph
         self._load_datasets()
 
