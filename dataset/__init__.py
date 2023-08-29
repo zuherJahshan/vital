@@ -1,6 +1,6 @@
 import os
 from typing import List, Tuple
-from mh_genome_ds import MHGenomeDS
+from mh_genome_ds_v2 import MHGenomeDS
 from dataset import Dataset, Label, Filepath
 
 Dirpath = str

@@ -1,5 +1,6 @@
 from typing import Iterator
 import os
+import tensorflow as tf
 
 
 def sub_dirpath_of_dirpath(dirpath: str, sub_dirpath: str) -> bool:
@@ -41,3 +42,33 @@ def print_progress_bar (iteration, total, prefix = '', suffix = '', decimals = 1
     # Print New Line on Complete
     if iteration == total: 
         print()
+
+
+############################
+##### Tensorflow utils #####
+############################
+@tf.function
+def random_partition(balls, bins):
+    """
+    1 represents a ball
+    0 represents a partition
+    """
+    # randomize the ones indexes
+    balls_indexes = tf.random.shuffle(tf.range(balls+bins-1))[:balls]
+    balls_and_partitions = tf.concat([
+        tf.scatter_nd(
+            indices=tf.expand_dims(balls_indexes, 1),
+            updates=tf.ones(balls, dtype=tf.dtypes.int32),
+            shape=[bins+balls-1]
+        ), 
+        [0]
+    ], axis=-1)
+    
+    # cumsum of balls and partitions
+    cumsum = tf.cumsum(balls_and_partitions)
+
+    summed_balls_per_partition = tf.boolean_mask(cumsum, balls_and_partitions == 0)
+
+    prev_balls_per_partition = tf.concat([[0], summed_balls_per_partition[:-1]], axis = -1)
+
+    return summed_balls_per_partition - prev_balls_per_partition

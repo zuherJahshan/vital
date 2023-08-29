@@ -153,8 +153,9 @@ class Model(object):
     ):
         self._load_datasets()
 
-        for dataset in self.datasets.values():
+        for dataset_name, dataset in self.datasets.items():
             dataset.update_props(dataset_props)
+            dataset.save(f"{self._get_model_path()}/{dataset_name}")
 
 
     def add_ds_examples(self, dataset, portions):
