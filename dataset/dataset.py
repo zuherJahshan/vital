@@ -86,15 +86,23 @@ class Dataset(object):
         shuffle_buffer_size: int = None,
     ):
         if no_labels:
-            return self._get_tf_examples_dataset(repeats, shuffle_buffer_size, self.batch_size)
+            tf_dataset = tf.data.Dataset.zip(
+                tf.data.Dataset.from_tensor_slices([accession for accession, _ in self.mapping]),
+                self._get_tf_examples_dataset()
+            )
         else :
             tf_dataset = tf.data.Dataset.zip((self._get_tf_examples_dataset(), self._get_labels_dataset()))
-        if repeats == None:
+        
+        if repeats == None and not no_labels:
             tf_dataset = tf_dataset.repeat()
-        else:
+        elif not no_labels:
             tf_dataset = tf_dataset.repeat(repeats)
-        if shuffle_buffer_size:
+        else: 
+            tf_dataset = tf_dataset.repeat(1)
+
+        if shuffle_buffer_size and not no_labels:
             tf_dataset = tf_dataset.shuffle(shuffle_buffer_size)
+        
         tf_dataset = tf_dataset.ragged_batch(self.batch_size)
         tf_dataset = tf_dataset.prefetch(tf.data.experimental.AUTOTUNE)
         return tf_dataset
@@ -140,6 +148,7 @@ class Dataset(object):
         ignore_mapping: bool = False
     ) -> None:
         self._define_private_props()
+        self.set_batch_size(32)
         self.mapping = []
         self.labels = []
         self.labels_tensor = None
@@ -156,15 +165,8 @@ class Dataset(object):
         
         # load the json
         with open(f"{dirpath}/dataset.json", 'r') as f:
-            serialized_obj = json.load(f)
-
-        self._deserialize_props(serialized_obj)
-
-        # check that the json contains the mapping and labels, and deserialize them
-        if not "mapping" in serialized_obj or not "labels" in serialized_obj:
-            raise Exception(f"File {dirpath}/dataset.json does not contain mapping or labels.")
-        self._add_mapping(serialized_obj["mapping"], serialized_obj["labels"])
-
+            self._deserialize(json.load(f))
+            
     
     def _add_mapping(
         self,
@@ -204,7 +206,19 @@ class Dataset(object):
         serialized_obj = self._serialize_props()
         serialized_obj["mapping"] = self.mapping
         serialized_obj["labels"] = self.labels
+        serialized_obj["batch_size"] = self.batch_size
         return serialized_obj
+
+
+    def _deserialize(self, serialized_obj) -> None:
+        self._deserialize_props(serialized_obj)
+
+        # check that the json contains the mapping and labels, and deserialize them
+        if "batch_size" in serialized_obj:
+            self.set_batch_size(serialized_obj["batch_size"])
+        if not "mapping" in serialized_obj or not "labels" in serialized_obj:
+            raise Exception(f"File {dirpath}/dataset.json does not contain mapping or labels.")
+        self._add_mapping(serialized_obj["mapping"], serialized_obj["labels"])
 
 
     def _get_labels_dataset(self):
@@ -234,7 +248,7 @@ class Dataset(object):
 
 
     @abstractmethod
-    def _get_tf_examples_dataset(self, repeats: int = None, shuffle_buffer_size: int = None, batch_size: int = 32):
+    def _get_tf_examples_dataset(self):
         pass
 
 

@@ -168,26 +168,22 @@ class MLModel(object):
         self,
         epochs: int,
         trainset: Dataset,
-        trainset_size: int,
         shuffle_buffer_size: int = 2048,
         validset: Dataset = None,
-        validset_size: int = None,
     ):
         if validset is None:
             return self.net.fit(
                 trainset.get_tf_dataset(shuffle_buffer_size=shuffle_buffer_size),
                 batch_size=self.hps.get(HPs.attributes.batch_size.name),
                 epochs=epochs,
-                steps_per_epoch=int(trainset_size / trainset.get_batch_size()),
+                steps_per_epoch=int(trainset.get_size() / trainset.get_batch_size()),
                 callbacks=[MLModelSaveCallback(self)]
             )
         else:
-            if validset_size is None:
-                raise ValueError("validset_size must be provided if validset is provided")
             return self.net.fit(
                 trainset.get_tf_dataset(shuffle_buffer_size=shuffle_buffer_size),
                 epochs=epochs,
-                steps_per_epoch=int(trainset_size / trainset.get_batch_size()),
+                steps_per_epoch=int(trainset.get_size() / trainset.get_batch_size()),
                 validation_data=validset.get_tf_dataset(repeats=1),
                 callbacks=[MLModelSaveCallback(self)]
             )
@@ -202,6 +198,19 @@ class MLModel(object):
                 repeats=1
             ),
         )
+    
+
+    def predict(
+        self,
+        dataset: tf.data.Dataset,
+    ):
+        results = []
+        for examples_batch_id, examples_batch in dataset.get_tf_dataset(no_labels=True):
+            predictions = self.net.predict_on_batch(examples_batch)
+            for i, prediction in enumerate(predictions):
+                example_id = examples_batch_id[i].numpy().decode("utf-8")
+                results.append((example_id, prediction))
+        return results
 
 
     def get_model_summary(self):

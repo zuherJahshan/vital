@@ -5,6 +5,7 @@ import random
 from typing import List, Tuple, Dict
 from enum import Enum
 import shutil
+import glob
 
 __ORIG_WD__ = os.getcwd()
 
@@ -300,63 +301,86 @@ class Model(object):
 ###########################################
     def train(
         self,
-        name: str,
+        ml_model_name: str,
         epochs: int
     ):
-        if not self._ml_model_exists(name):
-            raise Exception(f"ML model {name} does not exist.")
+        if not self._ml_model_exists(ml_model_name):
+            raise Exception(f"ML model {ml_model_name} does not exist.")
         
-        if not name in self.ml_models:
+        if not ml_model_name in self.ml_models:
             # load the model
-            self._load_ml_model(name)
+            self._load_ml_model(ml_model_name)
 
-        self.ml_models[name].train(
+        self.ml_models[ml_model_name].train(
             epochs=epochs,
             trainset=self.datasets[DatasetName.trainset.name],
-            trainset_size=self.datasets[DatasetName.trainset.name].get_size(),
             validset=self.datasets[DatasetName.validset.name],
-            validset_size=self.datasets[DatasetName.validset.name].get_size()
         )
 
 
     def evaluate(
         self,
-        name,
+        ml_model_name,
         dataset_name = DatasetName.validset.name,
         dataset = None
     ):
-        if not self._ml_model_exists(name):
-            raise Exception(f"ML model {name} does not exist.")
+        if not self._ml_model_exists(ml_model_name):
+            raise Exception(f"ML model {ml_model_name} does not exist.")
         
-        if not name in self.ml_models:
+        if not ml_model_name in self.ml_models:
             # load the model
-            self._load_ml_model(name)
+            self._load_ml_model(ml_model_name)
 
-        self.set_frag_len(self.ml_models[name].get_hps().get("d_model"))
             
         if dataset_name != None:
             dataset = self.datasets[dataset_name]
-        return self.ml_models[name].evaluate(
-            dataset,
-            dataset.get_size()
-        )
+        return self.ml_models[ml_model_name].evaluate(dataset)
 
 
     def test(
         self,
-        name,
-        file_mapping: List[Tuple[Filepath, Label]]
+        ml_model_name
     ):
         #return self.evaluate(name, dataset_name=DatasetName.testset.name)
         # get the testset filepaths
 
         # build the minhash dataset
-        minhash_dataset = Dataset(
-            mapping=file_mapping,
-            labels=self.datasets[DatasetName.trainset.name].get_labels(),
+        return self.evaluate(ml_model_name, dataset_name=DatasetName.testset.name)
+
+
+    def predict(
+        self,
+        ml_model_name: str,
+        dataset_type: str,
+        dataset_props: Dict,
+        examples: List[Filepath],
+    ):
+        if not self._ml_model_exists(ml_model_name):
+            raise Exception(f"ML model {ml_model_name} does not exist.")
+        
+        if not ml_model_name in self.ml_models:
+            # load the model
+            self._load_ml_model(ml_model_name)
+
+        # Extract the fasta files using glob
+        for filepath in examples:
+            if not os.path.exists(filepath):
+                raise Exception(f"File {filepath} does not exist.")
+            
+        mappings = [(filepath, "1") for filepath in examples]
+
+        # Create the dataset
+        dataset = create_dataset(
+            dataset_type,
+            mapping=mappings,
         )
-        minhash_dataset.set_coverage(200)
-        return self.evaluate(name, dataset_name=None, dataset=minhash_dataset)
+
+        dataset.update_props(dataset_props)
+
+        # Predict
+        return self.ml_models[ml_model_name].predict(dataset)
+
+        
 
 ###########################################
 ############ private functions ############

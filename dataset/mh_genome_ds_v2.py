@@ -183,7 +183,11 @@ class MHGenomeDS(Dataset):
             minval=0,
             maxval=1,
             dtype=tf.dtypes.float32
-        ) < tf.math.pow(self.deletion_rate, tf.cast(tf.math.ceil(coverage_per_base / 2), tf.float32))
+        ) < tf.where(
+                coverage_per_base > 0,
+                tf.math.pow(self.deletion_rate, tf.cast(tf.math.ceil(coverage_per_base / 2), tf.float32)),
+                0
+            )
 
         coverage_per_base = tf.boolean_mask(coverage_per_base, tf.logical_not(deletion_event))
 
@@ -208,7 +212,11 @@ class MHGenomeDS(Dataset):
             minval=0,
             maxval=1,
             dtype=tf.float32
-        ) < tf.math.pow(self.substitution_rate, tf.cast(tf.math.ceil(coverage_per_base / 2), tf.float32))
+        ) < tf.where(
+                coverage_per_base > 0,
+                tf.math.pow(self.substitution_rate, tf.cast(tf.math.ceil(coverage_per_base / 2), tf.float32)),
+                0
+            )
 
         # Build new genome
         new_bases = tf.where(substitution_event, random_bases, split_genome)
@@ -237,7 +245,11 @@ class MHGenomeDS(Dataset):
             minval=0,
             maxval=1,
             dtype=tf.float32
-        ) < tf.math.pow(self.insertion_rate, tf.cast(tf.math.ceil(coverage_per_base / 2), tf.float32))
+        ) < tf.where(
+                coverage_per_base > 0,
+                tf.math.pow(self.insertion_rate, tf.cast(tf.math.ceil(coverage_per_base / 2), tf.float32)),
+                0
+            )
 
         # Update the positions of the genome
         cumsum = tf.cumsum(tf.cast(indel_event, tf.int32))
