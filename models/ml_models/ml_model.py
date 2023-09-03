@@ -6,6 +6,7 @@ import h5py
 import numpy as np
 from hps import HPs
 from vit import VitStructure
+from irene import IreneStructure
 from ml_model_structure import MLModelStructure
 
 
@@ -21,11 +22,12 @@ os.chdir(__ORIG_WD__)
 
 
 ml_model_structures = {
-    "VitStructure": VitStructure
+    "VitStructure": VitStructure,
+    "IreneStructure": IreneStructure,
 }
 
 
-def get_structure(structure_name: str):
+def get_structure(structure_name: str) -> MLModelStructure:
     if structure_name in ml_model_structures:
         return ml_model_structures[structure_name]
     raise Exception(f"structure_name {structure_name} is not supported")
@@ -419,8 +421,10 @@ class MLModel(object):
             if isinstance(layer, self.net.layers[i].__class__):
                 # transfer weights
                 # check if the weights have the same shape
-                if not layer.get_weights()[0].shape == self.net.layers[i].get_weights()[0].shape:
+                if len(layer.get_weights()) > 0 and \
+                    not layer.get_weights()[0].shape == self.net.layers[i].get_weights()[0].shape:
                     break
+
                 self.net.layers[i].set_weights(layer.get_weights())
                 transfered_layers.append(layer.name)
                 layer.trainable = copied_trainable
