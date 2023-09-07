@@ -54,13 +54,8 @@ class CnnBlock(tf.keras.layers.Layer):
             activation=self.activation,
             kernel_initializer=self.initializer,
             kernel_regularizer=self.regularizer,
-            padding='same') for _ in range(2)]
-        self.layer_norms = [tf.keras.layers.LayerNormalization() for _ in range(2)]
-        # self.max_pooling = tf.keras.layers.MaxPooling2D(
-        #     pool_size=(2,1),
-        #     strides=2,
-        #     padding='same'
-        # )
+            padding='same') for _ in range(3)]
+        self.layer_norms = [tf.keras.layers.LayerNormalization() for _ in range(3)]
 
 
     def call(self, inputs):
@@ -68,13 +63,15 @@ class CnnBlock(tf.keras.layers.Layer):
         for i in range(2):
             x = self.conv2d_layers[i](x)
             x = self.layer_norms[i](x)
-        x = tf.nn.max_pool(
-            x,
+        y = self.conv2d_layers[2](x)
+        y = self.layer_norms[2](y + x)
+        y = tf.nn.max_pool(
+            y,
             ksize=[1, 1, 2, 1],  # Pooling size: No pooling on batch1, batch2, and the last dimension. Pool every 2 elements in the third dimension.
             strides=[1, 1, 2, 1],  # Stride: Move by 2 elements in the third dimension.
             padding='VALID'
         )
-        return x
+        return y
 
 
     @staticmethod

@@ -7,7 +7,9 @@ import numpy as np
 from hps import HPs
 from vit import VitStructure
 from irene import IreneStructure
+from sandy import SandyStructure
 from ml_model_structure import MLModelStructure
+from enum import Enum
 
 
 __ORIG_WD__ = os.getcwd()
@@ -24,7 +26,14 @@ os.chdir(__ORIG_WD__)
 ml_model_structures = {
     "VitStructure": VitStructure,
     "IreneStructure": IreneStructure,
+    "SandyStructure": SandyStructure,
 }
+
+class CopyTrainable(Enum):
+    COPY = 0
+    DONT_COPY = 1
+    ALL_TRAINABLE = 2
+    NONE_TRAINABLE = 3
 
 
 def get_structure(structure_name: str) -> MLModelStructure:
@@ -64,7 +73,7 @@ class MLModel(object):
 
 
     def get_hps(self):
-        return self.hps
+        return self.hps.get_dict()
 
 
     def get_weights_views(self):
@@ -84,7 +93,7 @@ class MLModel(object):
         self.hps.save_hps(self._get_ml_model_path())
 
         # save layers configuration
-        # self._save_layers_configuration()
+        self._save_layers_configuration()
 
         # save the weights
         self._save_weights(weights_view=weights_view, new_value=weights_view_value)
@@ -137,7 +146,7 @@ class MLModel(object):
     def transfer(
         self,
         other,
-        copied_trainable: bool = False
+        copied_trainable: bool = CopyTrainable.NONE_TRAINABLE
     ):
         self._transfer(other.get_net(), copied_trainable)
         self.record_transfer(other.get_name())
@@ -156,7 +165,7 @@ class MLModel(object):
         self._create_ml_model()
 
         # transfer the weights from the old model to the new one
-        self._transfer(old_net, copied_trainable=True)
+        self._transfer(old_net, copied_trainable=CopyTrainable.COPY)
         self.record_hps_change(hps)
 
 
@@ -266,7 +275,7 @@ class MLModel(object):
         )
 
         # run dummy example
-        self.net(tf.zeros((1, 1, self.hps.get("d_model"), 4)))
+        self.net(tf.zeros((2, 2, self.hps.get("d_model"), 4)))
 
 
     def _load_state(self):
@@ -279,7 +288,7 @@ class MLModel(object):
         # load the weights
         self._load_weights()
 
-        # self._load_layers_configuration()
+        self._load_layers_configuration()
 
         if os.path.exists(self._get_ml_model_history_path()):
             self._load_ml_model_history()
@@ -385,23 +394,29 @@ class MLModel(object):
             config = {}
             
             # save layers_trainable
-            layers_trainable = []
+            trainability = []
             for layer in self.net.layers:
                 # Save trainables
-                layers_trainable.append(layer.trainable) 
-            config["layers_trainable"] = layers_trainable
+                trainability.append(layer.trainable) 
+            config["layers_trainability"] = trainability
             
-            f.write(json.dumps([layer.get_config() for layer in self.net.layers]))
+            f.write(json.dumps(config))
 
 
     def _load_layers_configuration(self):
-        with open(f"{self._get_ml_model_path()}/layers_configuration.json", "r") as f:
-            config = json.loads(f.read())
+        if not os.path.exists(f"{self._get_ml_model_path()}/layers_configuration.json"):
+            return
+        try:
+            with open(f"{self._get_ml_model_path()}/layers_configuration.json", "r") as f:
+                config = json.loads(f.read())
+        except Exception as e:
+            print(f"Failed to load layers_configuration.json: {e}")
+            return
         
         # load layers_trainable
-        layers_trainable = config["layers_trainable"]
+        trainability = config["layers_trainability"]
         for i, layer in enumerate(self.net.layers):
-            layer.trainable = layers_trainable[i]
+            layer.trainable = trainability[i]
 
                
     def _ml_model_exists(self):
@@ -426,8 +441,13 @@ class MLModel(object):
                     break
 
                 self.net.layers[i].set_weights(layer.get_weights())
+                if copied_trainable == CopyTrainable.ALL_TRAINABLE:
+                    self.net.layers[i].trainable = True
+                elif copied_trainable == CopyTrainable.NONE_TRAINABLE:
+                    self.net.layers[i].trainable = False
+                elif copied_trainable == CopyTrainable.COPY:
+                    self.net.layers[i].trainable = layer.trainable
                 transfered_layers.append(layer.name)
-                layer.trainable = copied_trainable
             else:
                 break
         return transfered_layers

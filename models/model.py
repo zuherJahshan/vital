@@ -232,6 +232,17 @@ class Model(object):
         self.ml_models[name].change_hps(hps)
 
 
+    def get_ml_hps(self, name):
+        if not self._ml_model_exists(name):
+            raise Exception(f"ML model {name} does not exist.")
+        
+        if name not in self.ml_models:
+            # load the model
+            self._load_ml_model(name)
+        
+        return self.ml_models[name].get_hps()
+
+
     def remove_ml_model(
         self,
         name: str
@@ -284,7 +295,6 @@ class Model(object):
         self,
         transfer_from_name,
         transfer_to_name,
-        copied_trainable: bool = False,
     ) -> List[str]:
         if not self._ml_model_exists(transfer_from_name):
             raise Exception(f"ML model {transfer_from_name} does not exist.")
@@ -294,7 +304,7 @@ class Model(object):
         self._load_ml_model(transfer_from_name)
         self._load_ml_model(transfer_to_name)
 
-        return self.ml_models[transfer_to_name].transfer(self.ml_models[transfer_from_name], copied_trainable)
+        return self.ml_models[transfer_to_name].transfer(self.ml_models[transfer_from_name])
 
 ###########################################
 ##### Training and Inference Methods ######

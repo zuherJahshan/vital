@@ -56,6 +56,9 @@ class HPs:
         return self.hps_get_behavior.get(attribute, self.default_behavior)(attribute)
 
 
+    def get_dict(self):
+        return self.hps
+
     def get_default(self):
         return {
             HPs.attributes.dropout_rate.name: 0.1, ####
@@ -67,7 +70,7 @@ class HPs:
             },
             HPs.attributes.initializer.name: "glorot_normal", ####
             HPs.attributes.optimizer.name: { ####
-                "name": "Adam",
+                "name": "AdamW",
                 "params": {
                     "learning_rate": 0.001,
                 }
