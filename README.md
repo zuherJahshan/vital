@@ -146,10 +146,10 @@ To identify the predicted 5 closest lineages to the existing genome, run the fol
 python3 ./vital.py -i ./accessions/ -c 4 -k 5 -o results.csv
 ```
 
+### Downloading data
+Suppose you wanted to build your own models. In that case, you will need raw data locally on your machine.
+To Download data, please refer to [```vital/data_collectors/lab.ipynb```](https://github.com/zuherJahshan/vital/data_collectors/lab.ipynb)
 
-Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
-
-_For more examples, please refer to the [Documentation](https://example.com)_
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
