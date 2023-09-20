@@ -1,5 +1,6 @@
 import tensorflow as tf
 import os
+import sys
 import json
 import random
 from typing import List, Tuple, Dict
@@ -11,13 +12,15 @@ __ORIG_WD__ = os.getcwd()
 
 
 os.chdir(f"{__ORIG_WD__}/../utils/")
+sys.path.append(os.getcwd())
 from utils import sub_dirpath_of_dirpath
 
 os.chdir(f"{__ORIG_WD__}/../dataset")
-from __init__ import *
+sys.path.append(os.getcwd())
+from dataset_utils import create_dataset, load_dataset, remove_dataset
 
 os.chdir(f"{__ORIG_WD__}/ml_models/")
-
+sys.path.append(os.getcwd())
 from ml_model import MLModel, ml_model_structures
 
 os.chdir(__ORIG_WD__)
@@ -364,6 +367,7 @@ class Model(object):
         dataset_type: str,
         dataset_props: Dict,
         examples: List[Filepath],
+        top_k: int = 1,
     ):
         if not self._ml_model_exists(ml_model_name):
             raise Exception(f"ML model {ml_model_name} does not exist.")
@@ -388,7 +392,16 @@ class Model(object):
         dataset.update_props(dataset_props)
 
         # Predict
-        return self.ml_models[ml_model_name].predict(dataset)
+        raw_predictions = self.ml_models[ml_model_name].predict(dataset)
+        labels = self.get_labels()
+        predictions = {}
+        for raw_prediction in raw_predictions:
+            prediction = {
+                "probs": tf.math.top_k(raw_prediction[1], k=top_k).values.numpy().tolist(),
+                "labels": [labels[index] for index in tf.math.top_k(raw_prediction[1], k=top_k).indices.numpy().tolist()]
+            }
+            predictions[raw_prediction[0]] = prediction
+        return predictions
 
         
 

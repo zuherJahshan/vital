@@ -167,6 +167,7 @@ class MLModel(object):
         # transfer the weights from the old model to the new one
         self._transfer(old_net, copied_trainable=CopyTrainable.COPY)
         self.record_hps_change(hps)
+        
 
 
     def get_layers_by_names(
@@ -262,6 +263,10 @@ class MLModel(object):
             "transfers": [],
         }
 
+        self.layers_config = {
+            "layers_trainability": []
+        }
+
 
     def _create_ml_model(self):
         # create the model
@@ -276,6 +281,8 @@ class MLModel(object):
 
         # run dummy example
         self.net(tf.zeros((2, 2, self.hps.get("d_model"), 4)))
+
+        self.layers_config["layers_trainability"] = [layer.trainable for layer in self.net.layers]
 
 
     def _load_state(self):
@@ -391,16 +398,7 @@ class MLModel(object):
 
     def _save_layers_configuration(self):
         with open(f"{self._get_ml_model_path()}/layers_configuration.json", "w") as f:
-            config = {}
-            
-            # save layers_trainable
-            trainability = []
-            for layer in self.net.layers:
-                # Save trainables
-                trainability.append(layer.trainable) 
-            config["layers_trainability"] = trainability
-            
-            f.write(json.dumps(config))
+            f.write(json.dumps(self.layers_config))
 
 
     def _load_layers_configuration(self):
@@ -414,7 +412,8 @@ class MLModel(object):
             return
         
         # load layers_trainable
-        trainability = config["layers_trainability"]
+        self.layers_config = config
+        trainability = self.layers_config["layers_trainability"]
         for i, layer in enumerate(self.net.layers):
             layer.trainable = trainability[i]
 
@@ -450,6 +449,10 @@ class MLModel(object):
                 transfered_layers.append(layer.name)
             else:
                 break
+        trainability = []
+        for layer in self.net.layers:
+            trainability.append(layer.trainable)
+            self.layers_config["layers_trainability"] = trainability
         return transfered_layers
     
 
