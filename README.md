@@ -94,23 +94,25 @@ python3 ./vital.py -i ../fna_examples -c 32 -k 1
 
 ### Prerequisites
 
-* Ubuntu Operating System is preferrable, although it can work on almost any linux-based operating system
-* conda, please follow conda download and installation in the following link: [miniconda3 installation](https://docs.conda.io/projects/miniconda/en/latest/miniconda-other-installer-links.html)
+* Ubuntu Operating System is preferable, although it can work on almost any Linux-like operating system.
+* conda, please follow conda download and installation in the following link: [miniconda3 installation](https://docs.conda.io/projects/miniconda/en/latest/miniconda-other-installer-links.html).
 ### Installation
 
 1. Clone the repo
    ```sh
    git clone https://github.com/zuherJahshan/vital.git
    ```
-2. create the virtual environment
+2. Create the virtual environment
    ```sh
    cd vital
    conda env create -f environment.yaml
    ```
-4. Download ml models
+4. Download pre-trained models, this step might take a while.
    ```sh
    cd models
-   wget https://zenodo.org/record/8363856/files/vital_ml_models.zip?download=1
+   wget https://zenodo.org/record/8363856/files/vital_ml_models.zip?download=1 -O data.zip
+   unzip data.zip
+   rm data.zip
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -119,6 +121,25 @@ python3 ./vital.py -i ../fna_examples -c 32 -k 1
 
 <!-- USAGE EXAMPLES -->
 ## Usage
+
+### Simple prediction
+You can perform a lineage assignment.
+* Assume we are located in the ```vital/models``` directory
+* Assume the genomes to be assigned lineages are all separated across different fasta files, and all found under the ```./accessions``` directory
+* Assume the coverage of the genomes is 4.
+```sh
+python3 ./vital.py -i ./accessions/ -c 4 -o results.csv
+```
+After the execution of this command, the results will be inside results.csv file.
+
+### Novel lineage phylogenetic placement
+The ability to recognize novel mutations and emerging lineages is of great importance to successful genome surveillance during viral pandemics.
+ViTAL can perform a preliminary step for phylogenetic placement and find the closest lineages to the newly queried genome.
+To identify the predicted 5 closest lineages to the existing genome, run the following command:
+```sh
+python3 ./vital.py -i ./accessions/ -c 4 -k 5 -o results.csv
+```
+
 
 Use this space to show useful examples of how a project can be used. Additional screenshots, code examples and demos work well in this space. You may also link to more resources.
 
