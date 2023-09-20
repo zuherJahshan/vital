@@ -76,17 +76,6 @@
 
 
 
-<!-- ABOUT THE PROJECT -->
-## About The Project
-
-[![Product Name Screen Shot][product-screenshot]](https://example.com)
-
-Here's a blank template to get started: To avoid retyping too much info. Do a search and replace with your text editor for the following: `zuherJahshan`, `vital`, `twitter_handle`, `zuher jahshan`, `zuher1711@gmail.com_client`, `zuher1711@gmail.com`, `ViTAL: Vision TrAnsformer based Low coverage pathogen classification`, `ViTAL, the lineage assignment algorithm proposed here, inputs a low-coverage genome, and transforms it into embedded genome fragments using the MinHash scheme, which are then fed into a transformer-based classification neural network, that outputs the most likely lineages the input genome might belong to.`
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
 ### Built With
 [![My Skills](https://skillicons.dev/icons?i=linux,py,git,github,tensorflow)](https://skillicons.dev)
 
@@ -110,22 +99,23 @@ python3 ./vital.py -i ../fna_examples -c 32 -k 1
 
 ### Prerequisites
 
-* Ubuntu or any Linux like Operating system
-* conda, please follow conda download and installation in the following link: [[[https://example.com](https://docs.conda.io/projects/miniconda/en/latest/miniconda-other-installer-links.html)](https://docs.conda.io/projects/miniconda/en/latest/miniconda-other-installer-links.html)](https://example.com)
+* Ubuntu Operating System is preferrable, although it can work on almost any linux-based operating system
+* conda, please follow conda download and installation in the following link: [miniconda3 installation](https://docs.conda.io/projects/miniconda/en/latest/miniconda-other-installer-links.html)
 ### Installation
 
-1. Get a free API Key at [https://example.com](https://example.com)
-2. Clone the repo
+1. Clone the repo
    ```sh
    git clone https://github.com/zuherJahshan/vital.git
    ```
-3. Install NPM packages
+2. create the virtual environment
    ```sh
-   npm install
+   cd vital
+   conda env create -f environment.yaml
    ```
-4. Enter your API in `config.js`
-   ```js
-   const API_KEY = 'ENTER YOUR API';
+4. Download ml models
+   ```sh
+   cd models
+   wget https://zenodo.org/record/8363856/files/vital_ml_models.zip?download=1
    ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
