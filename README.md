@@ -88,15 +88,7 @@ Here's a blank template to get started: To avoid retyping too much info. Do a se
 
 
 ### Built With
-
-* [![Next][Next.js]][Next-url]
-* [![React][React.js]][React-url]
-* [![Vue][Vue.js]][Vue-url]
-* [![Angular][Angular.io]][Angular-url]
-* [![Svelte][Svelte.dev]][Svelte-url]
-* [![Laravel][Laravel.com]][Laravel-url]
-* [![Bootstrap][Bootstrap.com]][Bootstrap-url]
-* [![JQuery][JQuery.com]][JQuery-url]
+[![My Skills](https://skillicons.dev/icons?i=linux,py,git,github,tensorflow)](https://skillicons.dev)
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -110,12 +102,8 @@ To get a local copy up and running follow these simple example steps.
 
 ### Prerequisites
 
-This is an example of how to list things you need to use the software and how to install them.
-* npm
-  ```sh
-  npm install npm@latest -g
-  ```
-
+* Ubuntu or any Linux like Operating system
+* conda, please follow conda download and installation in the following link: [[[https://example.com](https://docs.conda.io/projects/miniconda/en/latest/miniconda-other-installer-links.html)](https://docs.conda.io/projects/miniconda/en/latest/miniconda-other-installer-links.html)](https://example.com)
 ### Installation
 
 1. Get a free API Key at [https://example.com](https://example.com)
@@ -147,20 +135,6 @@ _For more examples, please refer to the [Documentation](https://example.com)_
 
 
 
-<!-- ROADMAP -->
-## Roadmap
-
-- [ ] Feature 1
-- [ ] Feature 2
-- [ ] Feature 3
-    - [ ] Nested Feature
-
-See the [open issues](https://github.com/zuherJahshan/vital/issues) for a full list of proposed features (and known issues).
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
 <!-- CONTRIBUTING -->
 ## Contributing
 
@@ -179,19 +153,10 @@ Don't forget to give the project a star! Thanks again!
 
 
 
-<!-- LICENSE -->
-## License
-
-Distributed under the MIT License. See `LICENSE.txt` for more information.
-
-<p align="right">(<a href="#readme-top">back to top</a>)</p>
-
-
-
 <!-- CONTACT -->
 ## Contact
 
-Your Name - [@twitter_handle](https://twitter.com/twitter_handle) - zuher1711@gmail.com@zuher1711@gmail.com_client.com
+Your Name - Zuher Jahshan - zuher1711@gmail.com
 
 Project Link: [https://github.com/zuherJahshan/vital](https://github.com/zuherJahshan/vital)
 
@@ -223,7 +188,7 @@ Project Link: [https://github.com/zuherJahshan/vital](https://github.com/zuherJa
 [license-shield]: https://img.shields.io/github/license/zuherJahshan/vital.svg?style=for-the-badge
 [license-url]: https://github.com/zuherJahshan/vital/blob/master/LICENSE.txt
 [linkedin-shield]: https://img.shields.io/badge/-LinkedIn-black.svg?style=for-the-badge&logo=linkedin&colorB=555
-[linkedin-url]: https://linkedin.com/in/zuher jahshan
+[linkedin-url]: https://www.linkedin.com/in/zuher-jahshan-7a7199196/
 [product-screenshot]: images/screenshot.png
 [Next.js]: https://img.shields.io/badge/next.js-000000?style=for-the-badge&logo=nextdotjs&logoColor=white
 [Next-url]: https://nextjs.org/
