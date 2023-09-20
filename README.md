@@ -97,6 +97,9 @@ cd vital
 conda env create -f environment.yaml
 conda activate vital
 cd models
+wget https://zenodo.org/record/8363856/files/vital_ml_models.zip?download=1 -O data.zip
+unzip data.zip
+rm data.zip
 python3 ./vital.py -i ../fna_examples -c 32 -k 1
 ```
 
