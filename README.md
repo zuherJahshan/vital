@@ -67,6 +67,8 @@
       <ul>
         <li><a href="#simple-prediction">Simple prediction</a></li>
         <li><a href="#novel-lineage-phylogenetic-placement">Novel lineage phylogenetic placement</a></li>
+        <li><a href="#downloading-data">Downloading data</a></li>
+        <li><a href="#creating-model-and-training-machine-learning-models">Creating model and training machine learning models</a></li>
       </ul>
     </li>
     <li><a href="#contributing">Contributing</a></li>
@@ -160,7 +162,7 @@ covid19_genome.downloadLineages(accs_thresh = 256, max_accs = 1024)
 In this instantion the ```downloadLineages``` command will download at most ```max_accs``` accessions
 (i.e., in the context of this study it simply means a complete genome experiment) from lineages who have at least ```accs_thresh``` accessions.
 
-### Creating model and training ml models
+### Creating model and training machine learning models
 To train your own machine learning model please refer to the [```vital/models/covit_train2.ipynb```](https://github.com/zuherJahshan/vital/blob/main/models/covit_train2.ipynb)
 for a concrete example and a manual on how to use our software.
 
