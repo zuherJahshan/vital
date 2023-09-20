@@ -97,8 +97,16 @@ Here's a blank template to get started: To avoid retyping too much info. Do a se
 <!-- GETTING STARTED -->
 ## Getting Started
 
-This is an example of how you may give instructions on setting up your project locally.
-To get a local copy up and running follow these simple example steps.
+To get a local copy up and running follow these simple example steps:
+
+```sh
+git clone https://github.com/zuherJahshan/vital.git
+cd vital
+conda env create -f environment.yaml
+conda activate vital
+cd models
+python3 ./vital.py -i ../fna_examples -c 32 -k 1
+```
 
 ### Prerequisites
 
