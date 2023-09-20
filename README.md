@@ -148,8 +148,17 @@ python3 ./vital.py -i ./accessions/ -c 4 -k 5 -o results.csv
 
 ### Downloading data
 Suppose you wanted to build your own models. In that case, you will need raw data locally on your machine.
-To Download data, please refer to [```vital/data_collectors/lab.ipynb```](https://github.com/zuherJahshan/vital/blob/main/data_collectors/lab.ipynb)
+To Download data, please refer to [```vital/data_collectors/lab.ipynb```](https://github.com/zuherJahshan/vital/blob/main/data_collectors/lab.ipynb).
+Here's an example on how to download data using our data collector:
+```py
+from ncbi_genome import NCBIGenome
 
+covid19_genome = Covid19Genome()
+covid19_genome.downloadLineages(accs_thresh = 256, max_accs = 1024)
+```
+
+In this instantion the ```downloadLineages``` command will download at most ```max_accs``` accessions
+(i.e., in the context of this study it simply means a complete genome experiment) from lineages who have at least ```accs_thresh``` accessions.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
