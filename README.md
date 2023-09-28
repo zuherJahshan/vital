@@ -194,7 +194,7 @@ Don't forget to give the project a star! Thanks again!
 <!-- CONTACT -->
 ## Contact
 
-Your Name - Zuher Jahshan - zuher1711@gmail.com
+Zuher Jahshan - zuher1711@gmail.com
 
 Project Link: [https://github.com/zuherJahshan/vital](https://github.com/zuherJahshan/vital)
 
