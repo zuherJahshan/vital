@@ -8,6 +8,7 @@ from hps import HPs
 from vit import VitStructure
 from irene import IreneStructure
 from sandy import SandyStructure
+from convnext import ConvNextStructure
 from ml_model_structure import MLModelStructure
 from enum import Enum
 
@@ -27,6 +28,7 @@ ml_model_structures = {
     "VitStructure": VitStructure,
     "IreneStructure": IreneStructure,
     "SandyStructure": SandyStructure,
+    "ConvNextStructure": ConvNextStructure,
 }
 
 class CopyTrainable(Enum):
@@ -242,12 +244,12 @@ class MLModel(object):
         
         self.model_views: ModelViews = {
             "loss": lambda old, new: new < old,
-            "accuracy": lambda old, new: new > old,
+            "categorical_accuracy": lambda old, new: new > old,
             "manual": lambda old, new: True,
         }
         self.model_views_ranking = [
             "loss",
-            "accuracy",
+            "categorical_accuracy",
             "manual",
         ]
 
@@ -278,9 +280,10 @@ class MLModel(object):
             loss = self.hps.get(HPs.attributes.loss.name),
             metrics = self.hps.get(HPs.attributes.metrics.name)
         )
+        print(f"compiled the model with the following metrics: {self.hps.get(HPs.attributes.metrics.name)}")
 
         # run dummy example
-        self.net(tf.zeros((2, 2, self.hps.get("d_model"), 4)))
+        self.net(tf.zeros((1, self.hps.get("seq_len"), self.hps.get("d_model"), 4)))
 
         self.layers_config["layers_trainability"] = [layer.trainable for layer in self.net.layers]
 
@@ -378,7 +381,12 @@ class MLModel(object):
             
         with h5py.File(weights_view_path, 'r') as f:
             # order them according to the keys
-            weights = [np.array(f[f'weight_{i}'][:]) for i in range(len(f.keys()))]
+            weights = []
+            for i in range(len(f.keys())):
+                if f[f'weight_{i}'].shape == ():
+                    weights.append(np.array(f[f'weight_{i}']))
+                else:
+                    weights.append(np.array(f[f'weight_{i}'][:]))
         self.net.set_weights(weights)
 
 

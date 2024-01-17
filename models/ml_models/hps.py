@@ -59,6 +59,7 @@ class HPs:
     def get_dict(self):
         return self.hps
 
+
     def get_default(self):
         return {
             HPs.attributes.dropout_rate.name: 0.1, ####
@@ -76,7 +77,7 @@ class HPs:
                 }
             },
             HPs.attributes.loss.name: "categorical_crossentropy", ####
-            HPs.attributes.metrics.name: ["accuracy", "AUC"], ####
+            HPs.attributes.metrics.name: ["categorical_accuracy", "AUC"], ####
             HPs.attributes.activation.name: "relu", ####
         }
 

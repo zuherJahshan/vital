@@ -18,7 +18,7 @@ __ORIG_WD__ = os.getcwd()
 
 class FastaSeqGetter(object):
     """
-    FastaSeqGetter class This class is aimed to get a list of accessions as presented in the
+    FastaSeqGetter class This class is aimed to getLineage(self, accession):None a list of accessions as presented in the
     https://www.covid19dataportal.org/sequences database, and download them.
     The main function of this class is simply getSeqs
 
@@ -291,6 +291,16 @@ class Covid19Genome(object):
             return self.raw_data_path + accession + ".fasta"
         else:
             return ""
+
+
+    def getAccessionLineage(self, accession):
+        """
+        Returns the lineage of the accession, if accession does not exist return an empty string
+        """
+        if accession in self.local_acc_lin_dict:
+            return self.local_acc_lin_dict[accession]
+        else:
+            return None
 
     #######################################
     #######Private member functions########

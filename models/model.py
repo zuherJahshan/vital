@@ -17,7 +17,7 @@ from utils import sub_dirpath_of_dirpath
 
 os.chdir(f"{__ORIG_WD__}/../dataset")
 sys.path.append(os.getcwd())
-from dataset_utils import create_dataset, load_dataset, remove_dataset
+from dataset_utils import create_dataset, load_dataset, remove_dataset, get_dataset_types
 
 os.chdir(f"{__ORIG_WD__}/ml_models/")
 sys.path.append(os.getcwd())
@@ -324,7 +324,7 @@ class Model(object):
             # load the model
             self._load_ml_model(ml_model_name)
 
-        self.ml_models[ml_model_name].train(
+        return self.ml_models[ml_model_name].train(
             epochs=epochs,
             trainset=self.datasets[DatasetName.trainset.name],
             validset=self.datasets[DatasetName.validset.name],

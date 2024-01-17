@@ -1,7 +1,7 @@
 import os
 from dataset import Dataset, Filepath, Label, Dirpath
 import tensorflow as tf
-import tensorflow_probability as tfp
+# import tensorflow_probability as tfp
 from typing import List, Tuple, Set
 
 
@@ -83,7 +83,8 @@ class MHGenomeDS(Dataset):
 
 
     def _define_dependant_props(self):
-        self.dirichlet = tfp.distributions.Dirichlet(concentration=tf.ones([self.num_frags, self.frag_len + self.read_length - 1]))
+        pass
+        # self.dirichlet = tfp.distributions.Dirichlet(concentration=tf.ones([self.num_frags, self.frag_len + self.read_length - 1]))
 
     
     def _serialize_props(self):
