@@ -5,7 +5,6 @@ from abc import abstractmethod
 class MLModelStructure(tf.keras.Model):
     def __init__(self, **kwargs):
         super(MLModelStructure, self).__init__(**kwargs)
-
         self.grad_accum_steps = tf.Variable(0, trainable=False)
         
 
@@ -74,7 +73,7 @@ class MLModelStructure(tf.keras.Model):
     def train_step(self, data):
         inputs, labels = data
         with tf.GradientTape() as tape:
-            predictions = self.convnet(inputs, training=True)
+            predictions = self(inputs, training=True)
             loss = self.compute_loss(y=labels, y_pred=predictions)
         gradients = tape.gradient(loss, self.trainable_variables)
         self.update_grad_accum(gradients)
@@ -83,6 +82,22 @@ class MLModelStructure(tf.keras.Model):
         
         return self.compute_metrics(inputs, labels, predictions, None)
 
+    def compute_metrics(self, x, y, y_pred, sample_weight):
+
+        # This super call updates `self.compiled_metrics` and returns
+        # results for all metrics listed in `self.metrics`.
+        metric_results = super(MLModelStructure, self).compute_metrics(x, y, y_pred, sample_weight)
+
+        # Note that `self.custom_metric` is not listed in `self.metrics`.
+        y_pred_aligned = tf.one_hot(tf.argmax(y_pred, axis=1), depth=y.shape[1])
+        for metric in self.own_metrics:
+            if metric.name == "loss":
+                loss = self.compute_loss(y=y, y_pred=y_pred)
+                metric.update_state(loss)
+            else:
+                metric.update_state(y, y_pred_aligned, sample_weight)
+            metric_results[metric.name] = metric.result()
+        return metric_results
 
     @abstractmethod
     def call(self, inputs):

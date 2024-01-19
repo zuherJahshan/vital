@@ -51,21 +51,3 @@ class ConvStructure(MLModelStructure):
             "seq_len": "required",
             "d_model": "required",
         }
-    
-
-    def compute_metrics(self, x, y, y_pred, sample_weight):
-
-    # This super call updates `self.compiled_metrics` and returns
-    # results for all metrics listed in `self.metrics`.
-        metric_results = super(ConvStructure, self).compute_metrics(x, y, y_pred, sample_weight)
-
-        # Note that `self.custom_metric` is not listed in `self.metrics`.
-        y_pred_aligned = tf.one_hot(tf.argmax(y_pred, axis=1), depth=y.shape[1])
-        for metric in self.own_metrics:
-            if metric.name == "loss":
-                loss = self.compute_loss(y=y, y_pred=y_pred)
-                metric.update_state(loss)
-            else:
-                metric.update_state(y, y_pred_aligned, sample_weight)
-            metric_results[metric.name] = metric.result()
-        return metric_results
