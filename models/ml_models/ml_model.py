@@ -6,9 +6,7 @@ import h5py
 import numpy as np
 from hps import HPs
 from vit import VitStructure
-from irene import IreneStructure
-from sandy import SandyStructure
-from convnext import ConvNextStructure
+from convnet import ConvStructure
 from ml_model_structure import MLModelStructure
 from enum import Enum
 
@@ -26,9 +24,7 @@ os.chdir(__ORIG_WD__)
 
 ml_model_structures = {
     "VitStructure": VitStructure,
-    "IreneStructure": IreneStructure,
-    "SandyStructure": SandyStructure,
-    "ConvNextStructure": ConvNextStructure,
+    "ConvStructure": ConvStructure,
 }
 
 class CopyTrainable(Enum):

@@ -16,6 +16,8 @@ class HPs:
         learning_rate = "learning_rate",
         loss = "loss",
         metrics = "metrics",
+        batch_size = "batch_size",
+        mini_batch_size = "mini_batch_size",
 
 
     def __init__(
@@ -78,10 +80,18 @@ class HPs:
             },
             HPs.attributes.loss.name: "categorical_crossentropy", ####
             HPs.attributes.metrics.name: ["categorical_accuracy", "AUC"], ####
-            HPs.attributes.activation.name: "relu", ####
+            HPs.attributes.batch_size.name: 32,
+            HPs.attributes.mini_batch_size.name: 32,
+            HPs.attributes.activation.name: "re lu", ####
         }
 
 
+    def get_int(self, attribute):
+        if attribute in self.hps:
+            return int(self.hps[attribute])
+        else:
+            raise Exception(f"Attribute {attribute} not found in model hyper parameters")
+    
     def default_behavior(self, attribute):
             if attribute in self.hps:
                 return self.hps[attribute]
@@ -106,6 +116,8 @@ class HPs:
             HPs.attributes.optimizer.name: lambda attribute: get_from_tf_class(attribute, tf.keras.optimizers),
             HPs.attributes.loss.name: self.default_behavior,
             HPs.attributes.metrics.name: self.default_behavior,
+            HPs.attributes.batch_size.name: self.get_int,
+            HPs.attributes.mini_batch_size.name: self.get_int,
             HPs.attributes.activation.name: self.default_behavior,
         }
 
